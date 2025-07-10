@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Simple SNS Topic with Email Subscription - practice template
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Description: Email address to receive notifications
+
+Resources:
+  PracticeSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: practice-notifications-topic
+      DisplayName: Practice Notifications
+
+  PracticeSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref PracticeSNSTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+Outputs:
+  TopicArn:
+    Description: ARN of the created SNS Topic
+    Value: !Ref PracticeSNSTopic
