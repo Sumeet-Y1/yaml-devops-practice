@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  SQS Queue with Dead Letter Queue - practice template
+
+Resources:
+  MainQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: practice-main-queue
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: practice-dlq
+
+Outputs:
+  MainQueueUrl:
+    Value: !Ref MainQueue
+  DLQUrl:
+    Value: !Ref DeadLetterQueue
