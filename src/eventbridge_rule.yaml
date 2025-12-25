@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create EventBridge rule for scheduled Lambda trigger
+
+Resources:
+  DemoEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: demo-scheduled-rule
+      Description: Trigger Lambda every day at 6 PM
+      ScheduleExpression: cron(0 18 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DemoLambdaFunction.Arn
+          Id: DemoLambdaTarget
+
+  DemoLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DemoLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DemoEventRule.Arn
+
+  DemoLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: demo-lambda
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt DemoLambdaRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("Hello from scheduled Lambda!")
