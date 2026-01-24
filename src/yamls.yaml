@@ -1,11 +1,11 @@
-version: "1.0"
-settings:
-  environment: dev
-  retries: 3
-  timeout: 30
-services:
-  app:
-    image: sample/app:latest
-    ports:
-      - "8080:8080"
-    logging: enabled
+config:
+  app: yaml-practice
+  version: "1.0"
+  environment: test
+  retries: 2
+  timeout: 20
+database:
+  host: localhost
+  port: 5432
+  user: admin
+  password: secret
