@@ -1,0 +1,10 @@
+name: echo #ign
+fav_tools:
+   - intellij
+   - aws
+   - github
+   - gcp
+programming_languages:
+   - java
+   - js
+   - typescript
