@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch EC2 instance and create S3 bucket
+
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro   # free-tier eligible
+      ImageId: ami-0c55b159cbfafe1f0   # Amazon Linux 2 AMI (example, region-specific)
+      KeyName: my-keypair       # replace with your actual EC2 key pair name
+
+  MyS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-demo-bucket-sumeet123   # must be globally unique
