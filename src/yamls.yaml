@@ -1,0 +1,11 @@
+version: "1.0"
+settings:
+  environment: dev
+  retries: 3
+  timeout: 30
+services:
+  app:
+    image: sample/app:latest
+    ports:
+      - "8080:8080"
+    logging: enabled
