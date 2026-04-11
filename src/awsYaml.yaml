@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch 2 EC2 instances and create demo_s3 bucket
+
+Resources:
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0abcdef1234567890   # replace with valid AMI
+      Tags:
+        - Key: Name
+          Value: EC2-Demo-1
+
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0abcdef1234567890   # replace with valid AMI
+      Tags:
+        - Key: Name
+          Value: EC2-Demo-2
+
+  DemoS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo_s3
