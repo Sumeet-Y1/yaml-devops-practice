@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Lambda function with API Gateway
+
+Resources:
+  DemoLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: demo-lambda
+      Runtime: python3.9
+      Handler: index.handler
+      Role: arn:aws:iam::123456789012:role/lambda-execution-role
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "body": "Hello from Lambda!"
+              }
+
+  DemoApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: demo-api
+      Description: API Gateway linked to demo Lambda
+
+  DemoApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DemoApiGateway
+      ParentId: !GetAtt DemoApiGateway.RootResourceId
+      PathPart: demo
+
+  DemoApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DemoApiGateway
+      ResourceId: !Ref DemoApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DemoLambdaFunction.Arn}/invocations
