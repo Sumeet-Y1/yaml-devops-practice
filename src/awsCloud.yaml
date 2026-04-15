@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create RDS instance with CloudWatch alarm
+
+Resources:
+  DemoRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: demo-rds
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: password123
+      BackupRetentionPeriod: 7
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: demo-rds-instance
+
+  DemoCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: demo-rds-cpu-alarm
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DemoRDSInstance
+      AlarmActions: []
+      OKActions: []
+      InsufficientDataActions: []
