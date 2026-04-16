@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create ELB with Auto Scaling Group
+
+Resources:
+  DemoLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0abcdef1234567890   # replace with valid AMI
+      InstanceType: t2.micro
+      SecurityGroups:
+        - sg-0123456789abcdef0
+
+  DemoAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: demo-asg
+      LaunchConfigurationName: !Ref DemoLaunchConfig
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - subnet-0123456789abcdef0
+        - subnet-abcdef0123456789
+
+  DemoLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      LoadBalancerName: demo-elb
+      Listeners:
+        - LoadBalancerPort: 80
+          InstancePort: 80
+          Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: 3
+        UnhealthyThreshold: 5
+        Interval: 30
+        Timeout: 5
+      Subnets:
+        - subnet-0123456789abcdef0
+        - subnet-abcdef0123456789
