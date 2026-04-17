@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create CloudFront distribution with Route53 record
+
+Resources:
+  DemoS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo-cloudfront-bucket
+
+  DemoCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - DomainName: !GetAtt DemoS3Bucket.DomainName
+            Id: demo-origin
+        DefaultCacheBehavior:
+          TargetOriginId: demo-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+        DefaultRootObject: index.html
+
+  DemoRoute53Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: example.com.
+      Name: demo.example.com.
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt DemoCloudFrontDistribution.DomainName
