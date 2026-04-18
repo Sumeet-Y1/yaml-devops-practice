@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create EKS cluster with NodeGroup
+
+Resources:
+  DemoEKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: demo-eks-cluster
+      RoleArn: arn:aws:iam::123456789012:role/EKSClusterRole
+      ResourcesVpcConfig:
+        SubnetIds:
+          - subnet-0123456789abcdef0
+          - subnet-abcdef0123456789
+        SecurityGroupIds:
+          - sg-0123456789abcdef0
+
+  DemoNodeGroup:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref DemoEKSCluster
+      NodegroupName: demo-nodegroup
+      ScalingConfig:
+        MinSize: 1
+        MaxSize: 3
+        DesiredSize: 2
+      Subnets:
+        - subnet-0123456789abcdef0
+        - subnet-abcdef0123456789
+      InstanceTypes:
+        - t3.medium
