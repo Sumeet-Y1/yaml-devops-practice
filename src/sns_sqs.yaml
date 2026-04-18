@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create SNS topic with SQS subscription
+
+Resources:
+  DemoSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: demo-topic
+
+  DemoSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: demo-queue
+
+  DemoSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref DemoSNSTopic
+      Protocol: sqs
+      Endpoint: !GetAtt DemoSQSQueue.Arn
