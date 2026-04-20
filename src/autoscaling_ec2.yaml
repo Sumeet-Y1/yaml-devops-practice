@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Auto Scaling Group with EC2 instances
+
+Resources:
+  DemoLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0abcdef1234567890   # replace with valid AMI
+      InstanceType: t2.micro
+      SecurityGroups:
+        - sg-0123456789abcdef0
+
+  DemoAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: demo-asg
+      LaunchConfigurationName: !Ref DemoLaunchConfig
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - subnet-0123456789abcdef0
+        - subnet-abcdef0123456789
