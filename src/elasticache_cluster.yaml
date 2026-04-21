@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create ElastiCache Redis cluster
+
+Resources:
+  DemoCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      ClusterName: demo-redis-cluster
+      Engine: redis
+      CacheNodeType: cache.t3.micro
+      NumCacheNodes: 1
+      VpcSecurityGroupIds:
+        - sg-0123456789abcdef0
+      Tags:
+        - Key: Name
+          Value: demo-cache
