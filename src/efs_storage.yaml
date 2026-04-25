@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create EFS file system with mount target
+
+Resources:
+  DemoEFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: demo-efs
+
+  DemoMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref DemoEFSFileSystem
+      SubnetId: subnet-0123456789abcdef0
+      SecurityGroups:
+        - sg-0123456789abcdef0
