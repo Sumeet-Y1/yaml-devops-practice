@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Kinesis data stream
+
+Resources:
+  DemoKinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: demo-stream
+      ShardCount: 2
+      RetentionPeriodHours: 24
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Environment
+          Value: demo
