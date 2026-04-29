@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Step Functions state machine
+
+Resources:
+  DemoStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: demo-state-machine
+      RoleArn: arn:aws:iam::123456789012:role/StepFunctionsExecutionRole
+      DefinitionString: |
+        {
+          "Comment": "Demo state machine",
+          "StartAt": "HelloWorld",
+          "States": {
+            "HelloWorld": {
+              "Type": "Pass",
+              "Result": "Hello from Step Functions!",
+              "End": true
+            }
+          }
+        }
