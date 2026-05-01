@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create S3 bucket with lifecycle rules
+
+Resources:
+  DemoS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo-lifecycle-bucket
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldObjects
+            Status: Enabled
+            Prefix: logs/
+            ExpirationInDays: 30
+          - Id: TransitionToIA
+            Status: Enabled
+            Prefix: archive/
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 60
