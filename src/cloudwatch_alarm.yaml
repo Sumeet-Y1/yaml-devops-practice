@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create CloudWatch alarm for EC2 CPU utilization
+
+Resources:
+  DemoAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: demo-cpu-alarm
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 70
+      AlarmDescription: Alarm if CPU exceeds 70% for 2 minutes
+      Dimensions:
+        - Name: InstanceId
+          Value: i-0123456789abcdef0
+      ActionsEnabled: true
+      AlarmActions:
+        - arn:aws:sns:us-east-1:123456789012:demo-topic
