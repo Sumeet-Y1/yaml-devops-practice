@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create SNS topic with email subscription
+
+Resources:
+  DemoSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: demo-email-topic
+
+  DemoSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: user@example.com   # replace with your email
+      TopicArn: !Ref DemoSNSTopic
