@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Route 53 hosted zone and record set
+
+Resources:
+  DemoHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: example.com
+
+  DemoRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref DemoHostedZone
+      Name: www.example.com
+      Type: A
+      TTL: 300
+      ResourceRecords:
+        - 192.0.2.44
