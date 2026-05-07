@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create CloudFront distribution with S3 bucket
+
+Resources:
+  DemoS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo-cloudfront-bucket
+
+  DemoCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - DomainName: !GetAtt DemoS3Bucket.DomainName
+            Id: demo-s3-origin
+        DefaultCacheBehavior:
+          TargetOriginId: demo-s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+        DefaultRootObject: index.html
