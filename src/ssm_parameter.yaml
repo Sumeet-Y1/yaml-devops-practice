@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create SSM parameter for application config
+
+Resources:
+  DemoParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /demo/app/config/db-url
+      Type: String
+      Value: jdbc:mysql://demo-db.example.com:3306/demo
+      Description: Database connection URL for demo app
+      Tags:
+        - Key: Environment
+          Value: demo
