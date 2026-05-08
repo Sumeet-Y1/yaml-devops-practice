@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Amazon MQ broker
+
+Resources:
+  DemoMQBroker:
+    Type: AWS::AmazonMQ::Broker
+    Properties:
+      BrokerName: demo-broker
+      EngineType: ActiveMQ
+      EngineVersion: 5.16.3
+      DeploymentMode: SINGLE_INSTANCE
+      HostInstanceType: mq.t3.micro
+      PubliclyAccessible: true
+      Users:
+        - Username: demoUser
+          Password: DemoPass123!
