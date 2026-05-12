@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create RDS MySQL instance
+
+Resources:
+  DemoDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: demo-mysql-db
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: admin
+      MasterUserPassword: MySecurePassword123
+      BackupRetentionPeriod: 7
+      PubliclyAccessible: true
+      MultiAZ: false
+      StorageType: gp2
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
