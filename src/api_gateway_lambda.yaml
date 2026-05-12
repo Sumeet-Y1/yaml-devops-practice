@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create API Gateway with Lambda integration
+
+Resources:
+  DemoApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: demo-api
+      Description: API Gateway for Lambda integration
+
+  DemoApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DemoApiGateway
+      ParentId: !GetAtt DemoApiGateway.RootResourceId
+      PathPart: hello
+
+  DemoApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DemoApiGateway
+      ResourceId: !Ref DemoApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: 
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DemoLambdaFunction.Arn}/invocations
