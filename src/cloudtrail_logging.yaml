@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Enable CloudTrail logging for AWS account
+
+Resources:
+  DemoCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: demo-cloudtrail
+      S3BucketName: demo-cloudtrail-logs
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources: []
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
