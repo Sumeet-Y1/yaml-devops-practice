@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create WAF WebACL for application protection
+
+Resources:
+  DemoWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: demo-web-acl
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: demoWebACL
+      Rules:
+        - Name: BlockBadBots
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockBadBots
