@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS Transit Gateway
+
+Resources:
+  DemoTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: Demo Transit Gateway for VPC connectivity
+      DefaultRouteTableAssociation: enable
+      DefaultRouteTablePropagation: enable
+      AutoAcceptSharedAttachments: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+        - Key: Environment
+          Value: Dev
