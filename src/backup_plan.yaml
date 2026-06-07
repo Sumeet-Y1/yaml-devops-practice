@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS Backup plan
+
+Resources:
+  DemoBackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: demo-backup-vault
+      EncryptionKeyArn: !Ref AWS::NoValue
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+
+  DemoBackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: demo-backup-plan
+        Rules:
+          - RuleName: DailyBackup
+            TargetBackupVault: !Ref DemoBackupVault
+            ScheduleExpression: cron(0 12 * * ? *)
+            Lifecycle:
+              DeleteAfterDays: 30
+            RecoveryPointTags:
+              Environment: Dev
