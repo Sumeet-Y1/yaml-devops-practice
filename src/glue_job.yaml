@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS Glue job for ETL
+
+Resources:
+  DemoGlueJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: demo-glue-job
+      Role: !Ref DemoGlueRole
+      Command:
+        Name: glueetl
+        ScriptLocation: s3://demo-glue-scripts/etl-script.py
+        PythonVersion: "3"
+      DefaultArguments:
+        --TempDir: s3://demo-glue-temp/
+        --job-language: python
+      MaxRetries: 1
+      Timeout: 10
+      GlueVersion: "3.0"
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+
+  DemoGlueRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: demo-glue-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
