@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS KMS key for encryption
+
+Resources:
+  DemoKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Demo KMS key for GitHub streak
+      Enabled: true
+      KeyUsage: ENCRYPT_DECRYPT
+      KeySpec: SYMMETRIC_DEFAULT
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+        - Key: Environment
+          Value: Dev
+
+  DemoKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/demo-kms-key
+      TargetKeyId: !Ref DemoKMSKey
