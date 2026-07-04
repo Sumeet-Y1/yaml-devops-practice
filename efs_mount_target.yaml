@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create EFS file system with mount target
+
+Resources:
+  DemoEFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+
+  DemoEFSMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref DemoEFSFileSystem
+      SubnetId: !Ref PublicSubnet
+      SecurityGroups:
+        - !Ref DemoEFSSecurityGroup
+
+  DemoEFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow NFS access
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
