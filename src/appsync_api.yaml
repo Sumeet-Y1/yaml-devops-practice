@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AppSync GraphQL API
+
+Resources:
+  DemoGraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: demo-graphql-api
+      AuthenticationType: API_KEY
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+
+  DemoGraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !Ref DemoGraphQLApi
+      Definition: |
+        type Query {
+          hello: String
+        }
+
+  DemoGraphQLResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: !Ref DemoGraphQLApi
+      TypeName: Query
+      FieldName: hello
+      DataSourceName: !Ref DemoNoneDataSource
+
+  DemoNoneDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !Ref DemoGraphQLApi
+      Name: demo-none-datasource
+      Type: NONE
