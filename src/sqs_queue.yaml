@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create SQS queue for message processing
+
+Resources:
+  DemoSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: demo-sqs-queue
+      VisibilityTimeout: 30
+      MessageRetentionPeriod: 1209600   # 14 days
+      Tags:
+        - Key: Purpose
+          Value: GitHubStreak
+        - Key: Environment
+          Value: Dev
