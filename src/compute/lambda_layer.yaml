@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS Lambda Layer
+
+Resources:
+  DemoLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: demo-lambda-layer
+      Description: Demo layer for GitHub streak
+      CompatibleRuntimes:
+        - python3.9
+        - nodejs18.x
+      Content:
+        S3Bucket: demo-layer-bucket
+        S3Key: layer-code.zip
+      LicenseInfo: MIT
