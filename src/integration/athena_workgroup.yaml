@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Athena workgroup with query result encryption and an S3 output location,
+  plus a sample named query against a Glue Data Catalog database.
+
+Parameters:
+  WorkgroupName:
+    Type: String
+    Default: practice-athena-workgroup
+
+  ResultsBucketName:
+    Type: String
+    Description: S3 bucket name for Athena query results (must already exist or be created alongside this stack)
+
+  GlueDatabaseName:
+    Type: String
+    Default: practice_glue_db
+    Description: Name of the Glue Data Catalog database this workgroup will query
+
+Resources:
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ResultsBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldQueryResults
+            Status: Enabled
+            ExpirationInDays: 30
+
+  AthenaWorkgroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Ref WorkgroupName
+      Description: Workgroup for practice Athena queries
+      State: ENABLED
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          OutputLocation: !Sub s3://${ResultsBucket}/query-results/
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref GlueDatabaseName
+        Description: Practice Glue database queried via Athena
+
+  SampleNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: sample-table-count
+      Database: !Ref GlueDatabaseName
+      WorkGroup: !Ref AthenaWorkgroup
+      Description: Counts rows in a sample table
+      QueryString: !Sub |
+        SELECT COUNT(*) AS row_count
+        FROM ${GlueDatabaseName}.sample_table;
+
+Outputs:
+  WorkgroupName:
+    Value: !Ref AthenaWorkgroup
+
+  ResultsBucketName:
+    Value: !Ref ResultsBucket
+
+  GlueDatabaseName:
+    Value: !Ref GlueDatabase
