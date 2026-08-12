@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudWatch composite alarm that combines a high-CPU alarm and a
+  high-error-rate alarm into a single "unhealthy service" signal,
+  notifying an SNS topic (with email subscription) when triggered.
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: practice-service
+    Description: Used to name and scope the alarms
+
+  TargetResourceId:
+    Type: String
+    Description: The dimension value the alarms watch, e.g. an ASG name or ECS service name
+
+  CpuThreshold:
+    Type: Number
+    Default: 80
+    Description: CPU utilization percentage that triggers the CPU alarm
+
+  ErrorThreshold:
+    Type: Number
+    Default: 5
+    Description: Error count threshold over the evaluation period
+
+  NotificationEmail:
+    Type: String
+    Description: Email address to subscribe to the alert topic
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${ServiceName}-alerts
+      DisplayName: !Sub ${ServiceName} Alerts
+
+  AlertTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  HighCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-high-cpu
+      AlarmDescription: !Sub Triggers when ${ServiceName} CPU exceeds ${CpuThreshold}%
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref TargetResourceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref CpuThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-high-errors
+      AlarmDescription: !Sub Triggers when ${ServiceName} error count exceeds ${ErrorThreshold}
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref TargetResourceId
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ErrorThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  UnhealthyServiceCompositeAlarm:
+    Type: AWS::CloudWatch::CompositeAlarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-unhealthy
+      AlarmDescription: !Sub Fires when ${ServiceName} has high CPU AND high error rate simultaneously
+      AlarmRule: !Sub ALARM("${HighCpuAlarm}") AND ALARM("${HighErrorRateAlarm}")
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlertTopic
+      OKActions:
+        - !Ref AlertTopic
+
+Outputs:
+  AlertTopicArn:
+    Value: !Ref AlertTopic
+
+  CompositeAlarmName:
+    Value: !Ref UnhealthyServiceCompositeAlarm
+
+  CpuAlarmName:
+    Value: !Ref HighCpuAlarm
+
+  ErrorAlarmName:
+    Value: !Ref HighErrorRateAlarm
