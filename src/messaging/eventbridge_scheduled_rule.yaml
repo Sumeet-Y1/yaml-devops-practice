@@ -1,0 +1,56 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EventBridge rule that runs on a cron schedule and invokes a Lambda
+  function target, including the permission allowing EventBridge to
+  invoke it.
+
+Parameters:
+  RuleName:
+    Type: String
+    Default: practice-scheduled-rule
+
+  ScheduleExpression:
+    Type: String
+    Default: cron(0 6 * * ? *)
+    Description: EventBridge schedule expression, e.g. cron(0 6 * * ? *) for daily 6am UTC
+
+  TargetFunctionArn:
+    Type: String
+    Description: ARN of an existing Lambda function to invoke on schedule
+
+  RuleState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+
+Resources:
+  ScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Ref RuleName
+      Description: !Sub Triggers ${TargetFunctionArn} on schedule
+      ScheduleExpression: !Ref ScheduleExpression
+      State: !Ref RuleState
+      Targets:
+        - Id: ScheduledLambdaTarget
+          Arn: !Ref TargetFunctionArn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TargetFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledRule.Arn
+
+Outputs:
+  RuleArn:
+    Value: !GetAtt ScheduledRule.Arn
+
+  RuleName:
+    Value: !Ref ScheduledRule
