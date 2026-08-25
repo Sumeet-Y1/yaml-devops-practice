@@ -1,0 +1,76 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  IAM role scoped by a permission boundary, so even if its attached
+  policy is later widened, effective permissions can never exceed the
+  boundary. Useful for delegated role creation (e.g. CI/CD creating roles).
+
+Parameters:
+  RoleName:
+    Type: String
+    Default: practice-bounded-role
+
+  TrustedServicePrincipal:
+    Type: String
+    Default: lambda.amazonaws.com
+    Description: Service allowed to assume this role
+
+Resources:
+  PermissionBoundaryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub ${RoleName}-boundary
+      Description: Maximum permissions any role using this boundary can ever have
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowLimitedS3AndLogs
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+          - Sid: DenyIamAndOrgChanges
+            Effect: Deny
+            Action:
+              - iam:*
+              - organizations:*
+            Resource: '*'
+
+  BoundedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      PermissionsBoundary: !Ref PermissionBoundaryPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Ref TrustedServicePrincipal
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WorkingPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt BoundedRole.Arn
+
+  PermissionBoundaryArn:
+    Value: !Ref PermissionBoundaryPolicy
