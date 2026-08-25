@@ -1,0 +1,60 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  VPC endpoints: a gateway endpoint for S3 (no hourly cost, attached to
+  route tables) and an interface endpoint for Secrets Manager (private
+  access via ENI, backed by a security group).
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+  RouteTableIds:
+    Type: List<AWS::EC2::RouteTable::Id>
+    Description: Route tables to associate with the S3 gateway endpoint
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the Secrets Manager interface endpoint ENIs
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR allowed to reach the interface endpoint on 443
+
+Resources:
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds: !Ref RouteTableIds
+
+  SecretsManagerEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTPS to the Secrets Manager interface endpoint
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+
+  SecretsManagerInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref SecretsManagerEndpointSecurityGroup
+
+Outputs:
+  S3GatewayEndpointId:
+    Value: !Ref S3GatewayEndpoint
+
+  SecretsManagerEndpointId:
+    Value: !Ref SecretsManagerInterfaceEndpoint
