@@ -1,0 +1,63 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  SQS FIFO queue with a dead-letter queue, content-based deduplication,
+  and a redrive policy sending failed messages to the DLQ after 5 attempts.
+
+Parameters:
+  QueueBaseName:
+    Type: String
+    Default: practice-fifo-queue
+
+  MaxReceiveCount:
+    Type: Number
+    Default: 5
+    Description: Number of processing attempts before a message goes to the DLQ
+
+  VisibilityTimeoutSeconds:
+    Type: Number
+    Default: 30
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${QueueBaseName}-dlq.fifo
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+
+  FifoQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${QueueBaseName}.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: !Ref VisibilityTimeoutSeconds
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: !Ref MaxReceiveCount
+
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref FifoQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAccountSend
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sqs:SendMessage
+            Resource: !GetAtt FifoQueue.Arn
+
+Outputs:
+  QueueUrl:
+    Value: !Ref FifoQueue
+
+  QueueArn:
+    Value: !GetAtt FifoQueue.Arn
+
+  DeadLetterQueueArn:
+    Value: !GetAtt DeadLetterQueue.Arn
