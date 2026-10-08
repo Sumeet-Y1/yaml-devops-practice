@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EventBridge rule to capture EC2 state changes
+
+Resources:
+  DemoEC2EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: demo-ec2-event-rule
+      Description: Capture EC2 instance state change notifications
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DemoLambdaFunction.Arn
+          Id: DemoLambdaTarget
+
+  DemoLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: demo-ec2-event-handler
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt DemoLambdaRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("EC2 state change event:", event)
+
+  DemoLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: demo-ec2-event-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
