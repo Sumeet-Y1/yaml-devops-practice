@@ -1,0 +1,11 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create AWS Backup Vault
+
+Resources:
+  DemoBackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: demo-backup-vault
+      BackupVaultTags:
+        Purpose: GitHubStreak
+        Environment: Dev
