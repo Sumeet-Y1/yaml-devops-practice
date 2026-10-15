@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Cloud Map private DNS namespace with a service and a
+  registered instance, so apps can discover each other by DNS name.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to associate with the private DNS namespace
+
+  NamespaceName:
+    Type: String
+    Default: practice.internal
+    Description: Private DNS namespace name
+
+  InstanceIp:
+    Type: String
+    Default: 10.0.1.10
+    Description: Example private IP to register as a service instance
+
+Resources:
+  PrivateNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Ref NamespaceName
+      Description: Private namespace for service discovery practice
+      Vpc: !Ref VpcId
+
+  OrdersService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: orders
+      Description: Example orders service
+      NamespaceId: !GetAtt PrivateNamespace.Id
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 30
+
+  OrdersInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Properties:
+      ServiceId: !Ref OrdersService
+      InstanceId: orders-1
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref InstanceIp
+        AWS_INSTANCE_PORT: '8080'
+
+Outputs:
+  NamespaceId:
+    Description: Cloud Map namespace ID
+    Value: !GetAtt PrivateNamespace.Id
+
+  ServiceId:
+    Description: Cloud Map service ID
+    Value: !Ref OrdersService
+
+  DiscoveryDnsName:
+    Description: DNS name resolvable inside the VPC
+    Value: !Sub 'orders.${NamespaceName}'
