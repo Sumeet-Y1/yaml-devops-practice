@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS DataSync task that copies data from one S3 bucket to
+  another, using an IAM role and two S3 locations.
+
+Resources:
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DataSyncRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: datasync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DataSyncS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                Resource:
+                  - !GetAtt SourceBucket.Arn
+                  - !GetAtt DestinationBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:GetObjectTagging
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:
+                  - !Sub '${SourceBucket.Arn}/*'
+                  - !Sub '${DestinationBucket.Arn}/*'
+
+  SourceLocation:
+    Type: AWS::DataSync::LocationS3
+    Properties:
+      S3BucketArn: !GetAtt SourceBucket.Arn
+      S3Config:
+        BucketAccessRoleArn: !GetAtt DataSyncRole.Arn
+      Subdirectory: /
+
+  DestinationLocation:
+    Type: AWS::DataSync::LocationS3
+    Properties:
+      S3BucketArn: !GetAtt DestinationBucket.Arn
+      S3Config:
+        BucketAccessRoleArn: !GetAtt DataSyncRole.Arn
+      Subdirectory: /
+
+  CopyTask:
+    Type: AWS::DataSync::Task
+    Properties:
+      Name: !Sub '${AWS::StackName}-s3-copy'
+      SourceLocationArn: !Ref SourceLocation
+      DestinationLocationArn: !Ref DestinationLocation
+      Options:
+        VerifyMode: ONLY_FILES_TRANSFERRED
+        TransferMode: CHANGED
+        OverwriteMode: ALWAYS
+        PreserveDeletedFiles: PRESERVE
+
+Outputs:
+  TaskArn:
+    Description: ARN of the DataSync task (start an execution from the console or CLI)
+    Value: !Ref CopyTask
+
+  SourceBucketName:
+    Description: Upload test files here
+    Value: !Ref SourceBucket
+
+  DestinationBucketName:
+    Description: Files are copied here
+    Value: !Ref DestinationBucket
