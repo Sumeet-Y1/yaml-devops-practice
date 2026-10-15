@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables Amazon Detective by creating a behavior graph, and optionally
+  invites another AWS account as a member of that graph.
+
+Parameters:
+  AutoEnableMembers:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Automatically enable new organization accounts as members
+
+  MemberAccountId:
+    Type: String
+    Default: ''
+    Description: Optional 12-digit account ID to invite (leave empty to skip)
+
+  MemberEmail:
+    Type: String
+    Default: ''
+    Description: Email address of the account to invite (required if account ID is set)
+
+Conditions:
+  InviteMember: !Not [!Equals [!Ref MemberAccountId, '']]
+
+Resources:
+  DetectiveGraph:
+    Type: AWS::Detective::Graph
+    Properties:
+      AutoEnableMembers: !Ref AutoEnableMembers
+      Tags:
+        - Key: Purpose
+          Value: security-investigation
+
+  MemberInvite:
+    Type: AWS::Detective::MemberInvitation
+    Condition: InviteMember
+    Properties:
+      GraphArn: !Ref DetectiveGraph
+      MemberId: !Ref MemberAccountId
+      MemberEmailAddress: !Ref MemberEmail
+      Message: Invitation to join our Detective behavior graph
+      DisableEmailNotification: false
+
+Outputs:
+  GraphArn:
+    Description: ARN of the Detective behavior graph
+    Value: !Ref DetectiveGraph
