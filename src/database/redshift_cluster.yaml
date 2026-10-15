@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a single-node encrypted Amazon Redshift cluster with a custom
+  parameter group (SSL required) and an IAM role for loading data from S3.
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: analytics
+    AllowedPattern: '[a-z][a-z0-9_]*'
+    Description: Initial database name
+
+  MasterUsername:
+    Type: String
+    Default: awsuser
+    Description: Admin username
+
+  MasterUserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 64
+    Description: Must include upper, lower, and a number
+
+Resources:
+  RedshiftS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: redshift.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  ClusterParameterGroup:
+    Type: AWS::Redshift::ClusterParameterGroup
+    Properties:
+      Description: Require SSL connections
+      ParameterGroupFamily: redshift-1.0
+      Parameters:
+        - ParameterName: require_ssl
+          ParameterValue: 'true'
+
+  RedshiftCluster:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      ClusterType: single-node
+      NodeType: ra3.xlplus
+      DBName: !Ref DatabaseName
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      Encrypted: true
+      PubliclyAccessible: false
+      ClusterParameterGroupName: !Ref ClusterParameterGroup
+      IamRoles:
+        - !GetAtt RedshiftS3Role.Arn
+
+Outputs:
+  ClusterEndpoint:
+    Description: Cluster endpoint address
+    Value: !GetAtt RedshiftCluster.Endpoint.Address
+
+  ClusterPort:
+    Description: Cluster port
+    Value: !GetAtt RedshiftCluster.Endpoint.Port
+
+  S3RoleArn:
+    Description: Role to use in COPY commands
+    Value: !GetAtt RedshiftS3Role.Arn
