@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Transfer Family SFTP server backed by S3, with a
+  service-managed user locked to a home folder in the bucket.
+
+Parameters:
+  SftpUserName:
+    Type: String
+    Default: practiceuser
+    Description: SFTP username
+
+  SshPublicKey:
+    Type: String
+    Description: Public key body (contents of your id_rsa.pub or id_ed25519.pub)
+
+Resources:
+  SftpBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SftpUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: transfer.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SftpBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt SftpBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${SftpBucket.Arn}/*'
+
+  SftpServer:
+    Type: AWS::Transfer::Server
+    Properties:
+      Domain: S3
+      EndpointType: PUBLIC
+      IdentityProviderType: SERVICE_MANAGED
+      Protocols:
+        - SFTP
+
+  SftpUser:
+    Type: AWS::Transfer::User
+    Properties:
+      ServerId: !GetAtt SftpServer.ServerId
+      UserName: !Ref SftpUserName
+      Role: !GetAtt SftpUserRole.Arn
+      HomeDirectory: !Sub '/${SftpBucket}/home/${SftpUserName}'
+      SshPublicKeys:
+        - !Ref SshPublicKey
+
+Outputs:
+  ServerId:
+    Description: Transfer Family server ID
+    Value: !GetAtt SftpServer.ServerId
+
+  SftpEndpoint:
+    Description: Hostname to connect to with an SFTP client
+    Value: !Sub '${SftpServer.ServerId}.server.transfer.${AWS::Region}.amazonaws.com'
+
+  BucketName:
+    Description: Bucket that stores uploaded files
+    Value: !Ref SftpBucket
