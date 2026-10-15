@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys AWS Network Firewall in a VPC with a stateful domain deny-list
+  rule group, a firewall policy, and alert logging to CloudWatch Logs.
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+  FirewallSubnetCidr:
+    Type: String
+    Default: 10.0.1.0/28
+    Description: CIDR block for the dedicated firewall subnet
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  FirewallSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref FirewallSubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-firewall-subnet'
+
+  DomainDenyRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties:
+      RuleGroupName: !Sub '${AWS::StackName}-domain-deny'
+      Type: STATEFUL
+      Capacity: 100
+      Description: Blocks HTTP and HTTPS traffic to listed domains
+      RuleGroup:
+        RuleVariables:
+          IPSets:
+            HOME_NET:
+              Definition:
+                - !Ref VpcCidr
+        RulesSource:
+          RulesSourceList:
+            GeneratedRulesType: DENYLIST
+            TargetTypes:
+              - HTTP_HOST
+              - TLS_SNI
+            Targets:
+              - .badexample.com
+              - .malware-test.org
+
+  FirewallPolicy:
+    Type: AWS::NetworkFirewall::FirewallPolicy
+    Properties:
+      FirewallPolicyName: !Sub '${AWS::StackName}-policy'
+      FirewallPolicy:
+        StatelessDefaultActions:
+          - aws:forward_to_sfe
+        StatelessFragmentDefaultActions:
+          - aws:forward_to_sfe
+        StatefulRuleGroupReferences:
+          - ResourceArn: !Ref DomainDenyRuleGroup
+
+  Firewall:
+    Type: AWS::NetworkFirewall::Firewall
+    Properties:
+      FirewallName: !Sub '${AWS::StackName}-firewall'
+      FirewallPolicyArn: !Ref FirewallPolicy
+      VpcId: !Ref Vpc
+      DeleteProtection: false
+      SubnetChangeProtection: false
+      FirewallPolicyChangeProtection: false
+      SubnetMappings:
+        - SubnetId: !Ref FirewallSubnet
+
+  AlertLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/network-firewall/${AWS::StackName}/alert'
+      RetentionInDays: 7
+
+  FirewallLogging:
+    Type: AWS::NetworkFirewall::LoggingConfiguration
+    Properties:
+      FirewallArn: !Ref Firewall
+      LoggingConfiguration:
+        LogDestinationConfigs:
+          - LogType: ALERT
+            LogDestinationType: CloudWatchLogs
+            LogDestination:
+              logGroup: !Ref AlertLogGroup
+
+Outputs:
+  FirewallArn:
+    Description: ARN of the Network Firewall
+    Value: !Ref Firewall
+
+  FirewallEndpointId:
+    Description: Firewall endpoint (AZ:vpce-id) to use as a route table target
+    Value: !Select [0, !GetAtt Firewall.EndpointIds]
+
+  AlertLogGroupName:
+    Description: CloudWatch log group that receives alert logs
+    Value: !Ref AlertLogGroup
