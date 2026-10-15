@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Global Accelerator with a TCP listener and an endpoint
+  group that routes traffic to an existing Application Load Balancer.
+
+Parameters:
+  AlbArn:
+    Type: String
+    Description: ARN of an existing Application Load Balancer to use as the endpoint
+
+Resources:
+  Accelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Properties:
+      Name: !Sub '${AWS::StackName}-accelerator'
+      IpAddressType: IPV4
+      Enabled: true
+
+  Listener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref Accelerator
+      Protocol: TCP
+      PortRanges:
+        - FromPort: 80
+          ToPort: 80
+
+  EndpointGroup:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref Listener
+      EndpointGroupRegion: !Ref AWS::Region
+      TrafficDialPercentage: 100
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      ThresholdCount: 3
+      EndpointConfigurations:
+        - EndpointId: !Ref AlbArn
+          Weight: 128
+          ClientIPPreservationEnabled: true
+
+Outputs:
+  AcceleratorArn:
+    Description: ARN of the accelerator
+    Value: !Ref Accelerator
+
+  AcceleratorDnsName:
+    Description: DNS name that routes to the nearest healthy endpoint
+    Value: !GetAtt Accelerator.DnsName
