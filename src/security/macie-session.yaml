@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables Amazon Macie with a custom data identifier for employee IDs,
+  an allow list to ignore test data, and a filter that auto-archives
+  low-severity findings.
+
+Parameters:
+  FindingPublishingFrequency:
+    Type: String
+    Default: FIFTEEN_MINUTES
+    AllowedValues:
+      - FIFTEEN_MINUTES
+      - ONE_HOUR
+      - SIX_HOURS
+    Description: How often Macie publishes updated findings
+
+Resources:
+  MacieSession:
+    Type: AWS::Macie::Session
+    Properties:
+      Status: ENABLED
+      FindingPublishingFrequency: !Ref FindingPublishingFrequency
+
+  EmployeeIdIdentifier:
+    Type: AWS::Macie::CustomDataIdentifier
+    DependsOn: MacieSession
+    Properties:
+      Name: employee-id
+      Description: Detects employee IDs such as EMP-123456
+      Regex: 'EMP-[0-9]{6}'
+      Keywords:
+        - employee
+        - emp id
+      MaximumMatchDistance: 50
+
+  TestDataAllowList:
+    Type: AWS::Macie::AllowList
+    DependsOn: MacieSession
+    Properties:
+      Name: test-data-allow-list
+      Description: Ignore known dummy values used in test files
+      Criteria:
+        Regex: 'EMP-000000|test@example\.com'
+
+  ArchiveLowSeverityFilter:
+    Type: AWS::Macie::FindingsFilter
+    DependsOn: MacieSession
+    Properties:
+      Name: archive-low-severity
+      Description: Automatically archive low-severity findings
+      Action: ARCHIVE
+      Position: 1
+      FindingCriteria:
+        Criterion:
+          severity.description:
+            Eq:
+              - Low
+
+Outputs:
+  MacieSessionId:
+    Description: Macie session resource ID
+    Value: !Ref MacieSession
+
+  EmployeeIdIdentifierId:
+    Description: ID of the custom data identifier
+    Value: !Ref EmployeeIdIdentifier
+
+  TestDataAllowListId:
+    Description: ID of the allow list
+    Value: !Ref TestDataAllowList
