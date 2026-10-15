@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a small Amazon OpenSearch Service domain with encryption,
+  HTTPS enforcement, and fine-grained access control.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: practice-search
+    AllowedPattern: '[a-z][a-z0-9\-]{2,27}'
+    Description: Domain name (3-28 chars, lowercase, starts with a letter)
+
+  MasterUserName:
+    Type: String
+    Default: admin
+    Description: Master user for OpenSearch Dashboards
+
+  MasterUserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Must include upper, lower, number, and a special character
+
+Resources:
+  SearchDomain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      EngineVersion: OpenSearch_2.11
+      ClusterConfig:
+        InstanceType: t3.small.search
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+        ZoneAwarenessEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp3
+        VolumeSize: 10
+      EncryptionAtRestOptions:
+        Enabled: true
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
+      AdvancedSecurityOptions:
+        Enabled: true
+        InternalUserDatabaseEnabled: true
+        MasterUserOptions:
+          MasterUserName: !Ref MasterUserName
+          MasterUserPassword: !Ref MasterUserPassword
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: es:*
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+
+Outputs:
+  DomainEndpoint:
+    Description: HTTPS endpoint of the domain
+    Value: !GetAtt SearchDomain.DomainEndpoint
+
+  DashboardsUrl:
+    Description: OpenSearch Dashboards URL
+    Value: !Sub 'https://${SearchDomain.DomainEndpoint}/_dashboards'
+
+  DomainArn:
+    Description: ARN of the domain
+    Value: !GetAtt SearchDomain.Arn
