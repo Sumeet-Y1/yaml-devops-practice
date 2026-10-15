@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys a containerized web app on AWS App Runner from a public ECR image
+  with a custom auto scaling configuration and health checks.
+
+Resources:
+  AutoScalingConfig:
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    Properties:
+      AutoScalingConfigurationName: practice-asc
+      MaxConcurrency: 50
+      MaxSize: 3
+      MinSize: 1
+
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-service'
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: public.ecr.aws/aws-containers/hello-app-runner:latest
+          ImageRepositoryType: ECR_PUBLIC
+          ImageConfiguration:
+            Port: '8000'
+            RuntimeEnvironmentVariables:
+              - Name: ENVIRONMENT
+                Value: dev
+      InstanceConfiguration:
+        Cpu: 1 vCPU
+        Memory: 2 GB
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      AutoScalingConfigurationArn: !Ref AutoScalingConfig
+
+Outputs:
+  ServiceUrl:
+    Description: Public URL of the App Runner service
+    Value: !Sub 'https://${AppRunnerService.ServiceUrl}'
+
+  ServiceArn:
+    Description: ARN of the App Runner service
+    Value: !Ref AppRunnerService
