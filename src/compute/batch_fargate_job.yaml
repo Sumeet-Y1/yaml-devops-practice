@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Batch setup on Fargate: compute environment, job queue,
+  execution role, and a simple container job definition.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets for Batch jobs (need internet access to pull the image)
+
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups for Batch jobs
+
+  MaxvCpus:
+    Type: Number
+    Default: 4
+    Description: Maximum vCPUs the compute environment can scale to
+
+Resources:
+  BatchExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      Type: MANAGED
+      State: ENABLED
+      ComputeResources:
+        Type: FARGATE
+        MaxvCpus: !Ref MaxvCpus
+        Subnets: !Ref SubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+
+  JobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      JobQueueName: !Sub '${AWS::StackName}-queue'
+      State: ENABLED
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref ComputeEnvironment
+
+  JobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: !Sub '${AWS::StackName}-hello-job'
+      Type: container
+      PlatformCapabilities:
+        - FARGATE
+      RetryStrategy:
+        Attempts: 1
+      Timeout:
+        AttemptDurationSeconds: 300
+      ContainerProperties:
+        Image: public.ecr.aws/amazonlinux/amazonlinux:latest
+        Command:
+          - echo
+          - hello from AWS Batch
+        ExecutionRoleArn: !GetAtt BatchExecutionRole.Arn
+        ResourceRequirements:
+          - Type: VCPU
+            Value: '0.25'
+          - Type: MEMORY
+            Value: '512'
+        NetworkConfiguration:
+          AssignPublicIp: ENABLED
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+
+Outputs:
+  JobQueueArn:
+    Description: ARN of the job queue
+    Value: !Ref JobQueue
+
+  JobDefinitionArn:
+    Description: ARN of the job definition
+    Value: !Ref JobDefinition
+
+  ComputeEnvironmentArn:
+    Description: ARN of the compute environment
+    Value: !Ref ComputeEnvironment
