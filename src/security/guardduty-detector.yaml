@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables Amazon GuardDuty threat detection with S3 protection and
+  sends high-severity findings (7.0+) to an SNS topic via EventBridge.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives high-severity GuardDuty alerts
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+    ConstraintDescription: Must be a valid email address
+
+  FindingPublishingFrequency:
+    Type: String
+    Default: FIFTEEN_MINUTES
+    AllowedValues:
+      - FIFTEEN_MINUTES
+      - ONE_HOUR
+      - SIX_HOURS
+    Description: How often updated findings are exported to EventBridge
+
+Resources:
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: !Ref FindingPublishingFrequency
+      Features:
+        - Name: S3_DATA_EVENTS
+          Status: ENABLED
+        - Name: EBS_MALWARE_PROTECTION
+          Status: ENABLED
+        - Name: RDS_LOGIN_EVENTS
+          Status: ENABLED
+        - Name: LAMBDA_NETWORK_LOGS
+          Status: ENABLED
+
+  FindingsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-guardduty-findings'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  FindingsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref FindingsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref FindingsTopic
+
+  HighSeverityFindingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-high-severity-findings'
+      Description: Forward GuardDuty findings with severity >= 7 to SNS
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail-type:
+          - GuardDuty Finding
+        detail:
+          severity:
+            - numeric: ['>=', 7]
+      Targets:
+        - Id: SendToSns
+          Arn: !Ref FindingsTopic
+
+Outputs:
+  DetectorId:
+    Description: GuardDuty detector ID
+    Value: !Ref GuardDutyDetector
+
+  FindingsTopicArn:
+    Description: SNS topic that receives high-severity findings
+    Value: !Ref FindingsTopic
