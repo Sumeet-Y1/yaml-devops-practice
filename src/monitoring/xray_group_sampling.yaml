@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates AWS X-Ray resources: a group that filters slow or failing
+  requests with insights enabled, and a sampling rule for API traffic.
+
+Resources:
+  ErrorsAndSlowGroup:
+    Type: AWS::XRay::Group
+    Properties:
+      GroupName: practice-errors-slow
+      FilterExpression: 'fault = true OR responsetime > 5'
+      InsightsConfiguration:
+        InsightsEnabled: true
+        NotificationsEnabled: false
+
+  ApiSamplingRule:
+    Type: AWS::XRay::SamplingRule
+    Properties:
+      SamplingRule:
+        RuleName: practice-api-sampling
+        Priority: 100
+        FixedRate: 0.1
+        ReservoirSize: 1
+        ServiceName: '*'
+        ServiceType: '*'
+        Host: '*'
+        HTTPMethod: '*'
+        URLPath: /api/*
+        ResourceARN: '*'
+        Version: 1
+
+Outputs:
+  GroupArn:
+    Description: ARN of the X-Ray group
+    Value: !GetAtt ErrorsAndSlowGroup.GroupARN
+
+  SamplingRuleArn:
+    Description: ARN of the sampling rule
+    Value: !GetAtt ApiSamplingRule.RuleARN
