@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS AppConfig application with an environment, a hosted
+  feature flag configuration, a deployment strategy, and a deployment.
+
+Resources:
+  Application:
+    Type: AWS::AppConfig::Application
+    Properties:
+      Name: !Sub '${AWS::StackName}-app'
+      Description: Practice application for AppConfig
+
+  Environment:
+    Type: AWS::AppConfig::Environment
+    Properties:
+      ApplicationId: !Ref Application
+      Name: dev
+
+  ConfigProfile:
+    Type: AWS::AppConfig::ConfigurationProfile
+    Properties:
+      ApplicationId: !Ref Application
+      Name: feature-settings
+      LocationUri: hosted
+
+  ConfigVersion:
+    Type: AWS::AppConfig::HostedConfigurationVersion
+    Properties:
+      ApplicationId: !Ref Application
+      ConfigurationProfileId: !Ref ConfigProfile
+      ContentType: application/json
+      Content: |
+        {
+          "newCheckout": true,
+          "maxItemsPerCart": 25
+        }
+
+  GradualStrategy:
+    Type: AWS::AppConfig::DeploymentStrategy
+    Properties:
+      Name: !Sub '${AWS::StackName}-gradual'
+      DeploymentDurationInMinutes: 2
+      FinalBakeTimeInMinutes: 1
+      GrowthFactor: 50
+      GrowthType: LINEAR
+      ReplicateTo: NONE
+
+  Deployment:
+    Type: AWS::AppConfig::Deployment
+    Properties:
+      ApplicationId: !Ref Application
+      EnvironmentId: !Ref Environment
+      ConfigurationProfileId: !Ref ConfigProfile
+      ConfigurationVersion: !GetAtt ConfigVersion.VersionNumber
+      DeploymentStrategyId: !Ref GradualStrategy
+
+Outputs:
+  ApplicationId:
+    Description: AppConfig application ID
+    Value: !Ref Application
+
+  EnvironmentId:
+    Description: AppConfig environment ID
+    Value: !Ref Environment
+
+  ConfigurationProfileId:
+    Description: Configuration profile ID
+    Value: !Ref ConfigProfile
