@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Budgets monthly cost budget that emails you when actual
+  spend reaches 80 percent or forecasted spend exceeds 100 percent.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives budget alerts
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+  MonthlyLimit:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Monthly budget limit in USD
+
+Resources:
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-monthly-cost'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyLimit
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  BudgetName:
+    Description: Name of the budget
+    Value: !Ref MonthlyCostBudget
