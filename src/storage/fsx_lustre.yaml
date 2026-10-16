@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon FSx for Lustre scratch file system for temporary,
+  high-performance workloads.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the file system
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 988 and 1018-1023 from clients
+
+Resources:
+  LustreFileSystem:
+    Type: AWS::FSx::FileSystem
+    Properties:
+      FileSystemType: LUSTRE
+      StorageCapacity: 1200
+      SubnetIds:
+        - !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      LustreConfiguration:
+        DeploymentType: SCRATCH_2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-lustre'
+
+Outputs:
+  FileSystemId:
+    Description: FSx file system ID
+    Value: !Ref LustreFileSystem
+
+  DnsName:
+    Description: DNS name used when mounting
+    Value: !GetAtt LustreFileSystem.DNSName
+
+  MountName:
+    Description: Mount name for the mount command
+    Value: !GetAtt LustreFileSystem.LustreMountName
