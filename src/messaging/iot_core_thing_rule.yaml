@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS IoT Core thing, a device policy, and a topic rule that
+  forwards high-temperature readings to an SNS topic.
+
+Resources:
+  SensorThing:
+    Type: AWS::IoT::Thing
+    Properties:
+      ThingName: !Sub '${AWS::StackName}-sensor-1'
+      AttributePayload:
+        Attributes:
+          location: lab
+
+  DevicePolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-device-policy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: iot:Connect
+            Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${AWS::StackName}-*'
+          - Effect: Allow
+            Action: iot:Publish
+            Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/sensors/*'
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-iot-alerts'
+
+  IotRuleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PublishToAlertTopic
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref AlertTopic
+
+  HighTemperatureRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: HighTemperatureRule
+      TopicRulePayload:
+        Sql: "SELECT * FROM 'sensors/+/temperature' WHERE temperature > 30"
+        AwsIotSqlVersion: '2016-03-23'
+        RuleDisabled: false
+        Actions:
+          - Sns:
+              TargetArn: !Ref AlertTopic
+              RoleArn: !GetAtt IotRuleRole.Arn
+
+Outputs:
+  ThingName:
+    Description: Name of the IoT thing
+    Value: !Ref SensorThing
+
+  AlertTopicArn:
+    Description: SNS topic that receives high-temperature alerts
+    Value: !Ref AlertTopic
