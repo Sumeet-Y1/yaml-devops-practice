@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Neptune graph database cluster with one instance,
+  encryption at rest, IAM authentication, and a DB subnet group.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 8182 from your clients
+
+Resources:
+  NeptuneSubnetGroup:
+    Type: AWS::Neptune::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the Neptune cluster
+      SubnetIds: !Ref SubnetIds
+
+  NeptuneCluster:
+    Type: AWS::Neptune::DBCluster
+    Properties:
+      DBSubnetGroupName: !Ref NeptuneSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroupId
+      StorageEncrypted: true
+      IamAuthEnabled: true
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+
+  NeptuneInstance:
+    Type: AWS::Neptune::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref NeptuneCluster
+      DBInstanceClass: db.t4g.medium
+
+Outputs:
+  ClusterEndpoint:
+    Description: Writer endpoint
+    Value: !GetAtt NeptuneCluster.Endpoint
+
+  ReaderEndpoint:
+    Description: Reader endpoint
+    Value: !GetAtt NeptuneCluster.ReadEndpoint
+
+  Port:
+    Description: Neptune port
+    Value: !GetAtt NeptuneCluster.Port
