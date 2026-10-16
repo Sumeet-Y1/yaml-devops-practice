@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Data Lifecycle Manager policy that snapshots EBS
+  volumes tagged Backup=true every 24 hours and keeps the last 7.
+
+Resources:
+  DlmRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: dlm.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole
+
+  DailySnapshotPolicy:
+    Type: AWS::DLM::LifecyclePolicy
+    Properties:
+      Description: Daily EBS snapshots with 7-day retention
+      State: ENABLED
+      ExecutionRoleArn: !GetAtt DlmRole.Arn
+      PolicyDetails:
+        PolicyType: EBS_SNAPSHOT_MANAGEMENT
+        ResourceTypes:
+          - VOLUME
+        TargetTags:
+          - Key: Backup
+            Value: 'true'
+        Schedules:
+          - Name: DailySnapshots
+            CopyTags: true
+            TagsToAdd:
+              - Key: CreatedBy
+                Value: DLM
+            CreateRule:
+              Interval: 24
+              IntervalUnit: HOURS
+              Times:
+                - '03:00'
+            RetainRule:
+              Count: 7
+
+Outputs:
+  PolicyId:
+    Description: ID of the lifecycle policy
+    Value: !Ref DailySnapshotPolicy
+
+  DlmRoleArn:
+    Description: Role used by DLM
+    Value: !GetAtt DlmRole.Arn
