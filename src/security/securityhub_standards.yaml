@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables AWS Security Hub, subscribes to the AWS Foundational Security
+  Best Practices standard, and adds an insight for critical findings.
+
+Resources:
+  SecurityHub:
+    Type: AWS::SecurityHub::Hub
+    Properties:
+      EnableDefaultStandards: false
+      ControlFindingGenerator: SECURITY_CONTROL
+
+  FoundationalStandard:
+    Type: AWS::SecurityHub::Standard
+    DependsOn: SecurityHub
+    Properties:
+      StandardsArn: !Sub 'arn:aws:securityhub:${AWS::Region}::standards/aws-foundational-security-best-practices/v/1.0.0'
+
+  CriticalFindingsInsight:
+    Type: AWS::SecurityHub::Insight
+    DependsOn: SecurityHub
+    Properties:
+      Name: Critical findings by resource type
+      GroupByAttribute: ResourceType
+      Filters:
+        SeverityLabel:
+          - Comparison: EQUALS
+            Value: CRITICAL
+        RecordState:
+          - Comparison: EQUALS
+            Value: ACTIVE
+
+Outputs:
+  HubArn:
+    Description: ARN of the Security Hub
+    Value: !Ref SecurityHub
+
+  InsightArn:
+    Description: ARN of the critical findings insight
+    Value: !Ref CriticalFindingsInsight
