@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sets up AWS Lake Formation: an admin, an S3 data lake location registered
+  with the service-linked role, a Glue database, and a database permission.
+
+Parameters:
+  AdminArn:
+    Type: String
+    Description: ARN of the IAM user or role to make a Lake Formation admin
+
+  DatabaseName:
+    Type: String
+    Default: lakeformation_db
+    AllowedPattern: '[a-z0-9_]+'
+    Description: Glue database name
+
+Resources:
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DataLakeSettings:
+    Type: AWS::LakeFormation::DataLakeSettings
+    Properties:
+      Admins:
+        - DataLakePrincipalIdentifier: !Ref AdminArn
+
+  DataLakeLocation:
+    Type: AWS::LakeFormation::Resource
+    DependsOn: DataLakeSettings
+    Properties:
+      ResourceArn: !GetAtt DataLakeBucket.Arn
+      UseServiceLinkedRole: true
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseName
+        Description: Database governed by Lake Formation
+
+  AdminDatabasePermission:
+    Type: AWS::LakeFormation::PrincipalPermissions
+    DependsOn: DataLakeSettings
+    Properties:
+      Principal:
+        DataLakePrincipalIdentifier: !Ref AdminArn
+      Resource:
+        Database:
+          CatalogId: !Ref AWS::AccountId
+          Name: !Ref GlueDatabase
+      Permissions:
+        - DESCRIBE
+      PermissionsWithGrantOption: []
+
+Outputs:
+  DataLakeBucketName:
+    Description: Registered data lake bucket
+    Value: !Ref DataLakeBucket
+
+  GlueDatabaseName:
+    Description: Governed Glue database
+    Value: !Ref GlueDatabase
