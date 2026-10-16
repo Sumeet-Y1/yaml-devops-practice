@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates AWS Organizations organizational units and a service control
+  policy that blocks leaving the organization and stopping CloudTrail.
+
+Parameters:
+  ParentId:
+    Type: String
+    Description: Root ID (r-xxxx) or OU ID to create the new OUs under
+
+Resources:
+  WorkloadsOu:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: Workloads
+      ParentId: !Ref ParentId
+
+  SandboxOu:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: Sandbox
+      ParentId: !Ref ParentId
+
+  GuardrailScp:
+    Type: AWS::Organizations::Policy
+    Properties:
+      Name: basic-guardrails
+      Description: Prevent leaving the organization and disabling CloudTrail
+      Type: SERVICE_CONTROL_POLICY
+      TargetIds:
+        - !Ref SandboxOu
+      Content:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyLeaveOrganization
+            Effect: Deny
+            Action: organizations:LeaveOrganization
+            Resource: '*'
+          - Sid: DenyStopCloudTrail
+            Effect: Deny
+            Action:
+              - cloudtrail:StopLogging
+              - cloudtrail:DeleteTrail
+            Resource: '*'
+
+Outputs:
+  WorkloadsOuId:
+    Description: ID of the Workloads OU
+    Value: !Ref WorkloadsOu
+
+  SandboxOuId:
+    Description: ID of the Sandbox OU
+    Value: !Ref SandboxOu
+
+  GuardrailScpId:
+    Description: ID of the service control policy
+    Value: !Ref GuardrailScp
