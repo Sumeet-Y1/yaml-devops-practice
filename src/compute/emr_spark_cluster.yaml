@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon EMR cluster with Spark, service and instance roles,
+  an S3 log bucket, and auto-termination after one idle hour.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the cluster (needs internet or VPC endpoints)
+
+Resources:
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  EmrServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticmapreduce.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2
+
+  EmrInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role
+
+  EmrInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EmrInstanceRole
+
+  EmrCluster:
+    Type: AWS::EMR::Cluster
+    Properties:
+      Name: !Sub '${AWS::StackName}-cluster'
+      ReleaseLabel: emr-7.1.0
+      Applications:
+        - Name: Spark
+      JobFlowRole: !Ref EmrInstanceProfile
+      ServiceRole: !Ref EmrServiceRole
+      LogUri: !Sub 's3://${LogBucket}/logs/'
+      VisibleToAllUsers: true
+      AutoTerminationPolicy:
+        IdleTimeout: 3600
+      Instances:
+        Ec2SubnetId: !Ref SubnetId
+        TerminationProtected: false
+        MasterInstanceGroup:
+          Name: Primary
+          InstanceCount: 1
+          InstanceType: m5.xlarge
+          Market: ON_DEMAND
+        CoreInstanceGroup:
+          Name: Core
+          InstanceCount: 1
+          InstanceType: m5.xlarge
+          Market: ON_DEMAND
+
+Outputs:
+  ClusterId:
+    Description: EMR cluster ID
+    Value: !Ref EmrCluster
+
+  MasterPublicDns:
+    Description: Primary node DNS name
+    Value: !GetAtt EmrCluster.MasterPublicDNS
+
+  LogBucketName:
+    Description: Bucket that stores cluster logs
+    Value: !Ref LogBucket
