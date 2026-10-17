@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS CodeArtifact domain with a repository that proxies the
+  public npm registry through an upstream repository.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: practice-domain
+    Description: CodeArtifact domain name
+
+Resources:
+  Domain:
+    Type: AWS::CodeArtifact::Domain
+    Properties:
+      DomainName: !Ref DomainName
+
+  NpmStoreRepository:
+    Type: AWS::CodeArtifact::Repository
+    Properties:
+      DomainName: !GetAtt Domain.Name
+      RepositoryName: npm-store
+      Description: Pulls packages from the public npm registry
+      ExternalConnections:
+        - public:npmjs
+
+  TeamRepository:
+    Type: AWS::CodeArtifact::Repository
+    Properties:
+      DomainName: !GetAtt Domain.Name
+      RepositoryName: team-packages
+      Description: Team repository that falls back to npm-store
+      Upstreams:
+        - !GetAtt NpmStoreRepository.Name
+
+Outputs:
+  DomainArn:
+    Description: ARN of the domain
+    Value: !GetAtt Domain.Arn
+
+  TeamRepositoryArn:
+    Description: ARN of the team repository
+    Value: !GetAtt TeamRepository.Arn
