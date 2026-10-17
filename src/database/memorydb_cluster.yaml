@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon MemoryDB cluster with a subnet group, a password-based
+  user, an access control list, and in-transit encryption.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the cluster
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 6379 from clients
+
+  UserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    MaxLength: 128
+    Description: Password for the app user (16-128 characters)
+
+Resources:
+  SubnetGroup:
+    Type: AWS::MemoryDB::SubnetGroup
+    Properties:
+      SubnetGroupName: !Sub '${AWS::StackName}-subnets'
+      SubnetIds: !Ref SubnetIds
+
+  AppUser:
+    Type: AWS::MemoryDB::User
+    Properties:
+      UserName: app-user
+      AccessString: on ~* &* +@all
+      AuthenticationMode:
+        Type: password
+        Passwords:
+          - !Ref UserPassword
+
+  Acl:
+    Type: AWS::MemoryDB::ACL
+    Properties:
+      ACLName: !Sub '${AWS::StackName}-acl'
+      UserNames:
+        - !Ref AppUser
+
+  MemoryDbCluster:
+    Type: AWS::MemoryDB::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-cluster'
+      NodeType: db.t4g.small
+      ACLName: !Ref Acl
+      SubnetGroupName: !Ref SubnetGroup
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      NumShards: 1
+      NumReplicasPerShard: 0
+      TLSEnabled: true
+
+Outputs:
+  ClusterEndpoint:
+    Description: Cluster endpoint address
+    Value: !GetAtt MemoryDbCluster.ClusterEndpoint.Address
+
+  ClusterPort:
+    Description: Cluster port
+    Value: !GetAtt MemoryDbCluster.ClusterEndpoint.Port
