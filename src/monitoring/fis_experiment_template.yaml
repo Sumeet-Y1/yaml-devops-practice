@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Fault Injection Service experiment template that stops
+  one EC2 instance tagged Chaos=true for five minutes.
+
+Resources:
+  FisRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: fis.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowEc2Faults
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:StartInstances
+                  - ec2:DescribeInstances
+                Resource: '*'
+
+  StopInstanceExperiment:
+    Type: AWS::FIS::ExperimentTemplate
+    Properties:
+      Description: Stop one tagged EC2 instance for 5 minutes, then restart it
+      RoleArn: !GetAtt FisRole.Arn
+      StopConditions:
+        - Source: none
+      Targets:
+        Instances:
+          ResourceType: aws:ec2:instance
+          ResourceTags:
+            Chaos: 'true'
+          SelectionMode: COUNT(1)
+      Actions:
+        StopInstances:
+          ActionId: aws:ec2:stop-instances
+          Parameters:
+            startInstancesAfterDuration: PT5M
+          Targets:
+            Instances: Instances
+      Tags:
+        Name: !Sub '${AWS::StackName}-stop-instance'
+
+Outputs:
+  ExperimentTemplateId:
+    Description: ID of the experiment template
+    Value: !Ref StopInstanceExperiment
