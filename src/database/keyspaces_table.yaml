@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Keyspaces (for Apache Cassandra) keyspace and an
+  on-demand table with partition and clustering keys.
+
+Resources:
+  Keyspace:
+    Type: AWS::Cassandra::Keyspace
+    Properties:
+      KeyspaceName: practice_keyspace
+
+  OrdersTable:
+    Type: AWS::Cassandra::Table
+    Properties:
+      KeyspaceName: !Ref Keyspace
+      TableName: orders
+      PartitionKeyColumns:
+        - ColumnName: customer_id
+          ColumnType: text
+      ClusteringKeyColumns:
+        - Column:
+            ColumnName: order_date
+            ColumnType: timestamp
+          OrderBy: DESC
+      RegularColumns:
+        - ColumnName: order_id
+          ColumnType: uuid
+        - ColumnName: total
+          ColumnType: decimal
+      BillingMode:
+        Mode: ON_DEMAND
+      PointInTimeRecoveryEnabled: true
+
+Outputs:
+  KeyspaceName:
+    Description: Name of the keyspace
+    Value: !Ref Keyspace
+
+  TableName:
+    Description: Name of the table
+    Value: !Ref OrdersTable
