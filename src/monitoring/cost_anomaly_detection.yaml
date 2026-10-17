@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Cost Anomaly Detection monitor for all AWS services and a
+  daily email subscription for anomalies with an impact of 10 USD or more.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives anomaly reports
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  ServiceMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Properties:
+      MonitorName: !Sub '${AWS::StackName}-service-monitor'
+      MonitorType: DIMENSIONAL
+      MonitorDimension: SERVICE
+
+  AnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: !Sub '${AWS::StackName}-daily-alerts'
+      Frequency: DAILY
+      MonitorArnList:
+        - !Ref ServiceMonitor
+      Subscribers:
+        - Type: EMAIL
+          Address: !Ref AlertEmail
+      ThresholdExpression: '{"Dimensions":{"Key":"ANOMALY_TOTAL_IMPACT_ABSOLUTE","MatchOptions":["GREATER_THAN_OR_EQUAL"],"Values":["10"]}}'
+
+Outputs:
+  MonitorArn:
+    Description: ARN of the anomaly monitor
+    Value: !Ref ServiceMonitor
+
+  SubscriptionArn:
+    Description: ARN of the anomaly subscription
+    Value: !Ref AnomalySubscription
