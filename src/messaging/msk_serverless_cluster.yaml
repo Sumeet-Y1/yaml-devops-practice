@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon MSK Serverless Kafka cluster with IAM client
+  authentication inside a VPC.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in at least two Availability Zones
+
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups for the cluster
+
+Resources:
+  KafkaCluster:
+    Type: AWS::MSK::ServerlessCluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-kafka'
+      VpcConfigs:
+        - SubnetIds: !Ref SubnetIds
+          SecurityGroups: !Ref SecurityGroupIds
+      ClientAuthentication:
+        Sasl:
+          Iam:
+            Enabled: true
+
+Outputs:
+  ClusterArn:
+    Description: ARN of the MSK Serverless cluster
+    Value: !Ref KafkaCluster
