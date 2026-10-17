@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Service Catalog portfolio with one product built from a
+  CloudFormation template in S3, and grants an IAM principal access to it.
+
+Parameters:
+  ProductTemplateUrl:
+    Type: String
+    Description: S3 URL of the CloudFormation template that defines the product
+
+  PrincipalArn:
+    Type: String
+    Description: ARN of the IAM user, group, or role allowed to launch the product
+
+Resources:
+  Portfolio:
+    Type: AWS::ServiceCatalog::Portfolio
+    Properties:
+      DisplayName: Practice Portfolio
+      ProviderName: Cloud Team
+      Description: Approved templates for self-service launches
+
+  Product:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties:
+      Name: Practice Product
+      Owner: Cloud Team
+      Description: Example product backed by a CloudFormation template
+      ProvisioningArtifactParameters:
+        - Name: v1
+          Description: Initial version
+          Info:
+            LoadTemplateFromURL: !Ref ProductTemplateUrl
+
+  ProductAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties:
+      PortfolioId: !Ref Portfolio
+      ProductId: !Ref Product
+
+  PrincipalAssociation:
+    Type: AWS::ServiceCatalog::PortfolioPrincipalAssociation
+    Properties:
+      PortfolioId: !Ref Portfolio
+      PrincipalARN: !Ref PrincipalArn
+      PrincipalType: IAM
+
+Outputs:
+  PortfolioId:
+    Description: ID of the portfolio
+    Value: !Ref Portfolio
+
+  ProductId:
+    Description: ID of the product
+    Value: !Ref Product
