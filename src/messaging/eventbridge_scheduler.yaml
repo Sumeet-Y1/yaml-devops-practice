@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EventBridge Scheduler schedule group and an hourly schedule
+  that sends a message to an SQS queue.
+
+Resources:
+  TargetQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-scheduled'
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendToQueue
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt TargetQueue.Arn
+
+  ScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: practice-group
+
+  HourlySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: hourly-message
+      GroupName: !Ref ScheduleGroup
+      ScheduleExpression: rate(1 hour)
+      FlexibleTimeWindow:
+        Mode: OFF
+      State: ENABLED
+      Target:
+        Arn: !GetAtt TargetQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"message": "hello from scheduler"}'
+
+Outputs:
+  ScheduleArn:
+    Description: ARN of the schedule
+    Value: !GetAtt HourlySchedule.Arn
+
+  QueueUrl:
+    Description: Queue that receives the scheduled messages
+    Value: !Ref TargetQueue
