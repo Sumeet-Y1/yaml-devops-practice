@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an internet-facing Network Load Balancer with a TCP target group
+  and listener on port 80.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the target group
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets for the load balancer
+
+Resources:
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-nlb'
+      Type: network
+      Scheme: internet-facing
+      Subnets: !Ref SubnetIds
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-tcp-tg'
+      Protocol: TCP
+      Port: 80
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+
+  TcpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancer
+      Port: 80
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  NlbDnsName:
+    Description: DNS name of the load balancer
+    Value: !GetAtt NetworkLoadBalancer.DNSName
+
+  TargetGroupArn:
+    Description: Register instances in this target group
+    Value: !Ref TargetGroup
