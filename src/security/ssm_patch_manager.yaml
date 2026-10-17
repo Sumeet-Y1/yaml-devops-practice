@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an SSM Patch Manager setup: a patch baseline approving security
+  patches, and a weekly maintenance window that installs them on instances
+  tagged PatchGroup=practice.
+
+Resources:
+  PatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: !Sub '${AWS::StackName}-al2023-baseline'
+      Description: Approve critical and important security patches after 7 days
+      OperatingSystem: AMAZON_LINUX_2023
+      PatchGroups:
+        - practice
+      ApprovalRules:
+        PatchRules:
+          - ApproveAfterDays: 7
+            ComplianceLevel: CRITICAL
+            PatchFilterGroup:
+              PatchFilters:
+                - Key: CLASSIFICATION
+                  Values:
+                    - Security
+                - Key: SEVERITY
+                  Values:
+                    - Critical
+                    - Important
+
+  MaintenanceWindow:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      Name: !Sub '${AWS::StackName}-weekly-patching'
+      Schedule: cron(0 3 ? * SUN *)
+      Duration: 3
+      Cutoff: 1
+      AllowUnassociatedTargets: false
+
+  WindowTarget:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      WindowId: !Ref MaintenanceWindow
+      ResourceType: INSTANCE
+      Targets:
+        - Key: tag:PatchGroup
+          Values:
+            - practice
+
+  PatchTask:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      WindowId: !Ref MaintenanceWindow
+      TaskArn: AWS-RunPatchBaseline
+      TaskType: RUN_COMMAND
+      Priority: 1
+      MaxConcurrency: '1'
+      MaxErrors: '1'
+      Targets:
+        - Key: WindowTargetIds
+          Values:
+            - !Ref WindowTarget
+      TaskInvocationParameters:
+        MaintenanceWindowRunCommandParameters:
+          Parameters:
+            Operation:
+              - Install
+
+Outputs:
+  PatchBaselineId:
+    Description: ID of the patch baseline
+    Value: !Ref PatchBaseline
+
+  MaintenanceWindowId:
+    Description: ID of the maintenance window
+    Value: !Ref MaintenanceWindow
