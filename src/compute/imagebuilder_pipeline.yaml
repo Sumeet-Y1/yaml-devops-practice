@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EC2 Image Builder pipeline that builds a custom Amazon Linux
+  2023 AMI with nginx installed, using a component, recipe, and infrastructure
+  configuration.
+
+Resources:
+  BuilderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  BuilderInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref BuilderRole
+
+  InstallNginxComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: install-nginx
+      Version: 1.0.0
+      Platform: Linux
+      Data: |
+        name: InstallNginx
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: InstallNginx
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - dnf install -y nginx
+                    - systemctl enable nginx
+
+  ImageRecipe:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties:
+      Name: nginx-al2023-recipe
+      Version: 1.0.0
+      ParentImage: !Sub 'arn:aws:imagebuilder:${AWS::Region}:aws:image/amazon-linux-2023-x86/x.x.x'
+      Components:
+        - ComponentArn: !Ref InstallNginxComponent
+
+  InfraConfig:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties:
+      Name: !Sub '${AWS::StackName}-infra'
+      InstanceProfileName: !Ref BuilderInstanceProfile
+      InstanceTypes:
+        - t3.medium
+      TerminateInstanceOnFailure: true
+
+  ImagePipeline:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties:
+      Name: !Sub '${AWS::StackName}-pipeline'
+      ImageRecipeArn: !Ref ImageRecipe
+      InfrastructureConfigurationArn: !Ref InfraConfig
+      Status: ENABLED
+
+Outputs:
+  PipelineArn:
+    Description: ARN of the image pipeline
+    Value: !Ref ImagePipeline
+
+  RecipeArn:
+    Description: ARN of the image recipe
+    Value: !Ref ImageRecipe
