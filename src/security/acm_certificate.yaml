@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Requests a public AWS Certificate Manager certificate for a domain and
+  its wildcard, validated automatically with DNS records in Route 53.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Root domain name, for example example.com
+
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Route 53 hosted zone that contains the domain
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub '*.${DomainName}'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub '*.${DomainName}'
+          HostedZoneId: !Ref HostedZoneId
+
+Outputs:
+  CertificateArn:
+    Description: ARN to use with ALB, CloudFront (us-east-1), or API Gateway
+    Value: !Ref Certificate
