@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EventBridge Pipe that reads messages from an SQS queue,
+  filters for high-priority ones, and publishes them to an SNS topic.
+
+Resources:
+  SourceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-pipe-source'
+
+  TargetTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-pipe-target'
+
+  PipeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pipes.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PipeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt SourceQueue.Arn
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref TargetTopic
+
+  HighPriorityPipe:
+    Type: AWS::Pipes::Pipe
+    Properties:
+      Name: !Sub '${AWS::StackName}-high-priority'
+      RoleArn: !GetAtt PipeRole.Arn
+      Source: !GetAtt SourceQueue.Arn
+      SourceParameters:
+        SqsQueueParameters:
+          BatchSize: 1
+        FilterCriteria:
+          Filters:
+            - Pattern: '{"body": {"priority": ["HIGH"]}}'
+      Target: !Ref TargetTopic
+
+Outputs:
+  PipeArn:
+    Description: ARN of the pipe
+    Value: !GetAtt HighPriorityPipe.Arn
+
+  SourceQueueUrl:
+    Description: Send test messages here, e.g. {"priority":"HIGH"}
+    Value: !Ref SourceQueue
