@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an encrypted gp3 EBS volume that is snapshotted on stack deletion,
+  and optionally attaches it to an existing EC2 instance.
+
+Parameters:
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: AZ for the volume (must match the instance AZ if attaching)
+
+  InstanceId:
+    Type: String
+    Default: ''
+    Description: Optional EC2 instance ID to attach the volume to
+
+  VolumeSize:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Size in GiB
+
+Conditions:
+  AttachVolume: !Not [!Equals [!Ref InstanceId, '']]
+
+Resources:
+  DataVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      Size: !Ref VolumeSize
+      VolumeType: gp3
+      Iops: 3000
+      Throughput: 125
+      Encrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-data-volume'
+
+  VolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Condition: AttachVolume
+    Properties:
+      Device: /dev/sdf
+      InstanceId: !Ref InstanceId
+      VolumeId: !Ref DataVolume
+
+Outputs:
+  VolumeId:
+    Description: ID of the EBS volume
+    Value: !Ref DataVolume
