@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a VPC peering connection between two VPCs in the same account
+  and region, and adds a route in the requester route table.
+
+Parameters:
+  RequesterVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that initiates the peering
+
+  AccepterVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that receives the peering
+
+  RequesterRouteTableId:
+    Type: String
+    Description: Route table in the requester VPC
+
+  AccepterCidr:
+    Type: String
+    Default: 10.1.0.0/16
+    Description: CIDR block of the accepter VPC
+
+Resources:
+  PeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref RequesterVpcId
+      PeerVpcId: !Ref AccepterVpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-peering'
+
+  RouteToAccepter:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RequesterRouteTableId
+      DestinationCidrBlock: !Ref AccepterCidr
+      VpcPeeringConnectionId: !Ref PeeringConnection
+
+Outputs:
+  PeeringConnectionId:
+    Description: ID of the peering connection
+    Value: !Ref PeeringConnection
