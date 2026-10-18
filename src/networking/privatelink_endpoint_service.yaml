@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Publishes an existing Network Load Balancer as an AWS PrivateLink
+  endpoint service and allows one consumer account to connect.
+
+Parameters:
+  NetworkLoadBalancerArn:
+    Type: String
+    Description: ARN of the Network Load Balancer that fronts your service
+
+  ConsumerAccountId:
+    Type: String
+    Description: 12-digit AWS account ID allowed to create endpoints
+
+Resources:
+  EndpointService:
+    Type: AWS::EC2::VPCEndpointService
+    Properties:
+      NetworkLoadBalancerArns:
+        - !Ref NetworkLoadBalancerArn
+      AcceptanceRequired: true
+
+  ServicePermissions:
+    Type: AWS::EC2::VPCEndpointServicePermissions
+    Properties:
+      ServiceId: !Ref EndpointService
+      AllowedPrincipals:
+        - !Sub 'arn:aws:iam::${ConsumerAccountId}:root'
+
+Outputs:
+  ServiceId:
+    Description: ID of the endpoint service
+    Value: !Ref EndpointService
+
+  ServiceName:
+    Description: Service name consumers use to create an interface endpoint
+    Value: !Sub 'com.amazonaws.vpce.${AWS::Region}.${EndpointService}'
