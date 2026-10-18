@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a DynamoDB Accelerator (DAX) cluster with a subnet group,
+  encryption at rest, and a role that can access one DynamoDB table.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the DAX cluster
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 8111 from clients
+
+  TableArn:
+    Type: String
+    Description: ARN of the DynamoDB table DAX should cache
+
+Resources:
+  DaxRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: dax.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDbAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: dynamodb:*
+                Resource:
+                  - !Ref TableArn
+                  - !Sub '${TableArn}/*'
+
+  DaxSubnetGroup:
+    Type: AWS::DAX::SubnetGroup
+    Properties:
+      SubnetGroupName: !Sub '${AWS::StackName}-subnets'
+      SubnetIds: !Ref SubnetIds
+
+  DaxCluster:
+    Type: AWS::DAX::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-dax'
+      NodeType: dax.t3.small
+      ReplicationFactor: 1
+      IAMRoleARN: !GetAtt DaxRole.Arn
+      SubnetGroupName: !Ref DaxSubnetGroup
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  ClusterDiscoveryEndpoint:
+    Description: Endpoint the DAX client connects to
+    Value: !GetAtt DaxCluster.ClusterDiscoveryEndpointURL
+
+  ClusterArn:
+    Description: ARN of the DAX cluster
+    Value: !GetAtt DaxCluster.ClusterArn
