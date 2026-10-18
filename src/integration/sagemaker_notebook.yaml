@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon SageMaker notebook instance with an execution role
+  and a small EBS volume for machine learning experiments.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: ml.t3.medium
+    Description: Notebook instance type
+
+Resources:
+  SageMakerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+
+  NotebookInstance:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      NotebookInstanceName: !Sub '${AWS::StackName}-notebook'
+      InstanceType: !Ref InstanceType
+      RoleArn: !GetAtt SageMakerRole.Arn
+      VolumeSizeInGB: 5
+      DirectInternetAccess: Enabled
+      RootAccess: Disabled
+
+Outputs:
+  NotebookName:
+    Description: Name of the notebook instance
+    Value: !GetAtt NotebookInstance.NotebookInstanceName
+
+  ExecutionRoleArn:
+    Description: Role the notebook uses
+    Value: !GetAtt SageMakerRole.Arn
