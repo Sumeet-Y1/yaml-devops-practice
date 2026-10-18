@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Amplify Hosting app with a production branch and an
+  environment variable, ready for manual or CLI deployments.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: practice-web-app
+    Description: Name of the Amplify app
+
+Resources:
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Ref AppName
+      Platform: WEB
+      EnvironmentVariables:
+        - Name: APP_ENV
+          Value: production
+
+  MainBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: main
+      Stage: PRODUCTION
+      EnableAutoBuild: false
+
+Outputs:
+  AppId:
+    Description: Amplify app ID
+    Value: !GetAtt AmplifyApp.AppId
+
+  DefaultDomain:
+    Description: Default Amplify domain (prefix with the branch name)
+    Value: !GetAtt AmplifyApp.DefaultDomain
