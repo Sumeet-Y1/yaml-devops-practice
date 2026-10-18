@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon RDS Proxy in front of an existing MySQL instance,
+  with credentials from Secrets Manager and connection pooling.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the proxy
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group for the proxy
+
+  SecretArn:
+    Type: String
+    Description: Secrets Manager secret with the database username and password
+
+  DbInstanceIdentifier:
+    Type: String
+    Description: Identifier of the existing RDS MySQL instance
+
+Resources:
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadDbSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref SecretArn
+
+  DbProxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub '${AWS::StackName}-proxy'
+      EngineFamily: MYSQL
+      RoleArn: !GetAtt ProxyRole.Arn
+      VpcSubnetIds: !Ref SubnetIds
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroupId
+      RequireTLS: true
+      IdleClientTimeout: 1800
+      Auth:
+        - AuthScheme: SECRETS
+          SecretArn: !Ref SecretArn
+          IAMAuth: DISABLED
+
+  ProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref DbProxy
+      TargetGroupName: default
+      DBInstanceIdentifiers:
+        - !Ref DbInstanceIdentifier
+      ConnectionPoolConfigurationInfo:
+        MaxConnectionsPercent: 100
+        MaxIdleConnectionsPercent: 50
+        ConnectionBorrowTimeout: 120
+
+Outputs:
+  ProxyEndpoint:
+    Description: Endpoint your application connects to
+    Value: !GetAtt DbProxy.Endpoint
+
+  ProxyArn:
+    Description: ARN of the proxy
+    Value: !GetAtt DbProxy.DBProxyArn
