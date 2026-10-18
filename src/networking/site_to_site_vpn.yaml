@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Site-to-Site VPN with a customer gateway, a virtual private
+  gateway attached to a VPC, and a static route to the on-premises network.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to connect to the on-premises network
+
+  CustomerGatewayIp:
+    Type: String
+    Description: Public IP address of your on-premises VPN device
+
+  BgpAsn:
+    Type: Number
+    Default: 65000
+    Description: BGP ASN of the customer gateway
+
+  OnPremCidr:
+    Type: String
+    Default: 192.168.0.0/16
+    Description: On-premises network CIDR block
+
+Resources:
+  CustomerGateway:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      Type: ipsec.1
+      BgpAsn: !Ref BgpAsn
+      IpAddress: !Ref CustomerGatewayIp
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-cgw'
+
+  VpnGateway:
+    Type: AWS::EC2::VPNGateway
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vgw'
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VpcId
+      VpnGatewayId: !Ref VpnGateway
+
+  VpnConnection:
+    Type: AWS::EC2::VPNConnection
+    Properties:
+      Type: ipsec.1
+      CustomerGatewayId: !Ref CustomerGateway
+      VpnGatewayId: !Ref VpnGateway
+      StaticRoutesOnly: true
+
+  VpnRoute:
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties:
+      VpnConnectionId: !Ref VpnConnection
+      DestinationCidrBlock: !Ref OnPremCidr
+
+Outputs:
+  VpnConnectionId:
+    Description: ID of the VPN connection
+    Value: !Ref VpnConnection
+
+  CustomerGatewayId:
+    Description: ID of the customer gateway
+    Value: !Ref CustomerGateway
