@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an IAM Identity Center permission set with a managed policy and
+  an inline deny, and assigns it to a group in one AWS account.
+
+Parameters:
+  InstanceArn:
+    Type: String
+    Description: ARN of the IAM Identity Center instance (arn:aws:sso:::instance/ssoins-xxxx)
+
+  GroupId:
+    Type: String
+    Description: Identity Store group ID to assign the permission set to
+
+  TargetAccountId:
+    Type: String
+    Description: 12-digit AWS account ID to grant access to
+
+Resources:
+  ReadOnlyPermissionSet:
+    Type: AWS::SSO::PermissionSet
+    Properties:
+      Name: ReadOnlyPractice
+      Description: Read-only access with a block on viewing billing
+      InstanceArn: !Ref InstanceArn
+      SessionDuration: PT4H
+      ManagedPolicies:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+      InlinePolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Action:
+              - aws-portal:ViewBilling
+              - budgets:ViewBudget
+            Resource: '*'
+
+  GroupAssignment:
+    Type: AWS::SSO::Assignment
+    Properties:
+      InstanceArn: !Ref InstanceArn
+      PermissionSetArn: !GetAtt ReadOnlyPermissionSet.PermissionSetArn
+      PrincipalId: !Ref GroupId
+      PrincipalType: GROUP
+      TargetId: !Ref TargetAccountId
+      TargetType: AWS_ACCOUNT
+
+Outputs:
+  PermissionSetArn:
+    Description: ARN of the permission set
+    Value: !GetAtt ReadOnlyPermissionSet.PermissionSetArn
