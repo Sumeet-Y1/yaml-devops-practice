@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Aurora MySQL cluster with one writer instance,
+  encryption, and a master password managed automatically in Secrets Manager.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 3306 from your clients
+
+Resources:
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the Aurora cluster
+      SubnetIds: !Ref SubnetIds
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      MasterUsername: admin
+      ManageMasterUserPassword: true
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroupId
+      StorageEncrypted: true
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+
+  WriterInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref AuroraCluster
+      Engine: aurora-mysql
+      DBInstanceClass: db.t4g.medium
+
+Outputs:
+  WriterEndpoint:
+    Description: Cluster writer endpoint
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+
+  ReaderEndpoint:
+    Description: Cluster reader endpoint
+    Value: !GetAtt AuroraCluster.ReadEndpoint.Address
+
+  MasterSecretArn:
+    Description: Secrets Manager secret holding the master password
+    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
