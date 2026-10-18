@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom SSM Command document that reports disk usage and a State
+  Manager association that runs it daily on instances tagged Environment=dev.
+
+Resources:
+  DiskReportDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Command
+      DocumentFormat: YAML
+      TargetType: /AWS::EC2::Instance
+      Content:
+        schemaVersion: '2.2'
+        description: Print disk usage for all mounted file systems
+        mainSteps:
+          - action: aws:runShellScript
+            name: showDiskUsage
+            inputs:
+              runCommand:
+                - df -h
+
+  DailyAssociation:
+    Type: AWS::SSM::Association
+    Properties:
+      AssociationName: !Sub '${AWS::StackName}-daily-disk-report'
+      Name: !Ref DiskReportDocument
+      ScheduleExpression: rate(1 day)
+      Targets:
+        - Key: tag:Environment
+          Values:
+            - dev
+
+Outputs:
+  DocumentName:
+    Description: Name of the SSM document
+    Value: !Ref DiskReportDocument
+
+  AssociationId:
+    Description: ID of the State Manager association
+    Value: !Ref DailyAssociation
