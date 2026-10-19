@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shows a Lambda-backed CloudFormation custom resource that transforms
+  text to uppercase and returns the result as an attribute.
+
+Parameters:
+  InputText:
+    Type: String
+    Default: hello cloudformation
+    Description: Text for the custom resource to transform
+
+Resources:
+  CustomResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  TransformFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt CustomResourceRole.Arn
+      Code:
+        ZipFile: |
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  if event["RequestType"] in ("Create", "Update"):
+                      text = event["ResourceProperties"].get("Text", "")
+                      data = {"Result": text.upper()}
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, data, "string-transformer")
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, event["PhysicalResourceId"])
+              except Exception as error:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(error)})
+
+  TransformedText:
+    Type: Custom::StringTransformer
+    Properties:
+      ServiceToken: !GetAtt TransformFunction.Arn
+      Text: !Ref InputText
+
+Outputs:
+  OriginalText:
+    Description: Value passed to the custom resource
+    Value: !Ref InputText
+
+  TransformedResult:
+    Description: Value returned by the custom resource
+    Value: !GetAtt TransformedText.Result
