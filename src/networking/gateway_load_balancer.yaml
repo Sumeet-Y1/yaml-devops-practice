@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Gateway Load Balancer with a GENEVE target group and publishes
+  it as a VPC endpoint service, the pattern used for virtual security appliances.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the appliances run
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the load balancer
+
+Resources:
+  GatewayLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-gwlb'
+      Type: gateway
+      Subnets: !Ref SubnetIds
+
+  ApplianceTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-appliances'
+      Protocol: GENEVE
+      Port: 6081
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: '80'
+
+  GwlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref GatewayLoadBalancer
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ApplianceTargetGroup
+
+  EndpointService:
+    Type: AWS::EC2::VPCEndpointService
+    Properties:
+      GatewayLoadBalancerArns:
+        - !Ref GatewayLoadBalancer
+      AcceptanceRequired: false
+
+Outputs:
+  GatewayLoadBalancerArn:
+    Description: ARN of the Gateway Load Balancer
+    Value: !Ref GatewayLoadBalancer
+
+  TargetGroupArn:
+    Description: Register appliance instances here
+    Value: !Ref ApplianceTargetGroup
+
+  EndpointServiceId:
+    Description: Create Gateway Load Balancer endpoints from this service
+    Value: !Ref EndpointService
