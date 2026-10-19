@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Route 53 health check on a primary server and failover DNS
+  records that switch traffic to a secondary server when it is unhealthy.
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that contains the domain
+
+  DomainName:
+    Type: String
+    Description: Root domain name, for example example.com
+
+  PrimaryIp:
+    Type: String
+    Description: Public IP of the primary server
+
+  SecondaryIp:
+    Type: String
+    Description: Public IP of the standby server
+
+Resources:
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        IPAddress: !Ref PrimaryIp
+        Port: 80
+        ResourcePath: /
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-primary'
+
+  PrimaryRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: primary
+      Failover: PRIMARY
+      HealthCheckId: !Ref PrimaryHealthCheck
+      ResourceRecords:
+        - !Ref PrimaryIp
+
+  SecondaryRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: secondary
+      Failover: SECONDARY
+      ResourceRecords:
+        - !Ref SecondaryIp
+
+Outputs:
+  HealthCheckId:
+    Description: ID of the primary health check
+    Value: !Ref PrimaryHealthCheck
+
+  FailoverRecordName:
+    Description: DNS name that fails over
+    Value: !Sub 'app.${DomainName}'
