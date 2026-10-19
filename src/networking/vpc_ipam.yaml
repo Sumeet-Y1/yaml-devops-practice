@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon VPC IP Address Manager (IPAM) with a regional pool of
+  private CIDRs, then creates a VPC whose CIDR is allocated from that pool.
+
+Resources:
+  Ipam:
+    Type: AWS::EC2::IPAM
+    Properties:
+      Description: Practice IPAM
+      Tier: free
+      OperatingRegions:
+        - RegionName: !Ref AWS::Region
+
+  PrivatePool:
+    Type: AWS::EC2::IPAMPool
+    Properties:
+      AddressFamily: ipv4
+      IpamScopeId: !GetAtt Ipam.PrivateDefaultScopeId
+      Locale: !Ref AWS::Region
+      Description: Regional pool carved from 10.0.0.0/8
+      AutoImport: false
+      AllocationDefaultNetmaskLength: 24
+      AllocationMinNetmaskLength: 16
+      AllocationMaxNetmaskLength: 28
+      ProvisionedCidrs:
+        - Cidr: 10.0.0.0/8
+
+  AllocatedVpc:
+    Type: AWS::EC2::VPC
+    DependsOn: PrivatePool
+    Properties:
+      Ipv4IpamPoolId: !Ref PrivatePool
+      Ipv4NetmaskLength: 24
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ipam-vpc'
+
+Outputs:
+  IpamId:
+    Description: ID of the IPAM
+    Value: !Ref Ipam
+
+  PoolId:
+    Description: ID of the private pool
+    Value: !Ref PrivatePool
+
+  VpcCidr:
+    Description: CIDR the pool allocated to the VPC
+    Value: !GetAtt AllocatedVpc.CidrBlock
