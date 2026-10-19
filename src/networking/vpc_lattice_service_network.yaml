@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a VPC Lattice service network with a Lambda-backed service, a
+  listener, and a VPC association so clients in the VPC can call the service.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to associate with the service network
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  BackendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "headers": {"Content-Type": "application/json"},
+                  "body": json.dumps({"message": "hello from VPC Lattice"})
+              }
+
+  LatticeInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendFunction
+      Action: lambda:InvokeFunction
+      Principal: vpc-lattice.amazonaws.com
+
+  ServiceNetwork:
+    Type: AWS::VpcLattice::ServiceNetwork
+    Properties:
+      Name: practice-network
+      AuthType: NONE
+
+  LatticeService:
+    Type: AWS::VpcLattice::Service
+    Properties:
+      Name: practice-service
+      AuthType: NONE
+
+  LambdaTargetGroup:
+    Type: AWS::VpcLattice::TargetGroup
+    DependsOn: LatticeInvokePermission
+    Properties:
+      Name: practice-lambda-targets
+      Type: LAMBDA
+      Targets:
+        - Id: !GetAtt BackendFunction.Arn
+
+  HttpListener:
+    Type: AWS::VpcLattice::Listener
+    Properties:
+      Name: http-80
+      ServiceIdentifier: !Ref LatticeService
+      Protocol: HTTP
+      Port: 80
+      DefaultAction:
+        Forward:
+          TargetGroups:
+            - TargetGroupIdentifier: !Ref LambdaTargetGroup
+              Weight: 100
+
+  ServiceAssociation:
+    Type: AWS::VpcLattice::ServiceNetworkServiceAssociation
+    Properties:
+      ServiceNetworkIdentifier: !Ref ServiceNetwork
+      ServiceIdentifier: !Ref LatticeService
+
+  VpcAssociation:
+    Type: AWS::VpcLattice::ServiceNetworkVpcAssociation
+    Properties:
+      ServiceNetworkIdentifier: !Ref ServiceNetwork
+      VpcIdentifier: !Ref VpcId
+
+Outputs:
+  ServiceNetworkId:
+    Description: ID of the service network
+    Value: !Ref ServiceNetwork
+
+  ServiceDnsName:
+    Description: DNS name clients inside the VPC call
+    Value: !GetAtt LatticeService.DnsEntry.DomainName
