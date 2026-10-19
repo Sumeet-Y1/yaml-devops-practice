@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a self-managed CloudFormation StackSet that deploys an SNS topic
+  to one target account in multiple regions, plus the administration role it needs.
+
+Parameters:
+  TargetAccountId:
+    Type: String
+    Description: 12-digit account ID that receives the stack instances
+
+  TargetRegions:
+    Type: CommaDelimitedList
+    Default: us-east-1,us-west-2
+    Description: Regions to deploy into
+
+Resources:
+  StackSetAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWSCloudFormationStackSetAdministrationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AssumeExecutionRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole
+
+  AlertTopicStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      StackSetName: practice-alert-topic
+      Description: Deploys a standard SNS topic everywhere
+      PermissionModel: SELF_MANAGED
+      AdministrationRoleARN: !GetAtt StackSetAdminRole.Arn
+      ExecutionRoleName: AWSCloudFormationStackSetExecutionRole
+      OperationPreferences:
+        MaxConcurrentCount: 1
+        FailureToleranceCount: 0
+      StackInstancesGroup:
+        - DeploymentTargets:
+            Accounts:
+              - !Ref TargetAccountId
+          Regions: !Ref TargetRegions
+      TemplateBody: |
+        AWSTemplateFormatVersion: '2010-09-09'
+        Description: Standard alert topic deployed by a StackSet
+        Resources:
+          AlertTopic:
+            Type: AWS::SNS::Topic
+            Properties:
+              TopicName: standard-alerts
+        Outputs:
+          TopicArn:
+            Value: !Ref AlertTopic
+
+Outputs:
+  StackSetId:
+    Description: ID of the StackSet
+    Value: !Ref AlertTopicStackSet
+
+  AdminRoleArn:
+    Description: Administration role used by the StackSet
+    Value: !GetAtt StackSetAdminRole.Arn
