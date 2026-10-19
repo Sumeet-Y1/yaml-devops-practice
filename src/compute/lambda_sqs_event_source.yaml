@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Connects an SQS queue to a Lambda function with an event source mapping,
+  batching, partial batch failure reporting, and a dead-letter queue.
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  WorkQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 180
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  ProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt ProcessorRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              failures = []
+              for record in event["Records"]:
+                  try:
+                      print("Processing:", record["body"])
+                  except Exception:
+                      failures.append({"itemIdentifier": record["messageId"]})
+              return {"batchItemFailures": failures}
+
+  QueueMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt WorkQueue.Arn
+      FunctionName: !Ref ProcessorFunction
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+      Enabled: true
+
+Outputs:
+  WorkQueueUrl:
+    Description: Send messages here
+    Value: !Ref WorkQueue
+
+  DeadLetterQueueUrl:
+    Description: Failed messages land here after 3 attempts
+    Value: !Ref DeadLetterQueue
