@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Bedrock guardrail with content filters, a denied topic,
+  and PII handling, then publishes a numbered version of it.
+
+Resources:
+  Guardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: !Sub '${AWS::StackName}-guardrail'
+      Description: Basic safety guardrail for a chat assistant
+      BlockedInputMessaging: Sorry, I can't help with that request.
+      BlockedOutputsMessaging: Sorry, I can't provide that response.
+      ContentPolicyConfig:
+        FiltersConfig:
+          - Type: HATE
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: VIOLENCE
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: INSULTS
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: PROMPT_ATTACK
+            InputStrength: HIGH
+            OutputStrength: NONE
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: investment-advice
+            Definition: Recommendations about buying or selling specific financial products.
+            Examples:
+              - Should I buy this stock?
+              - Which crypto will go up next month?
+            Type: DENY
+      SensitiveInformationPolicyConfig:
+        PiiEntitiesConfig:
+          - Type: EMAIL
+            Action: ANONYMIZE
+          - Type: US_SOCIAL_SECURITY_NUMBER
+            Action: BLOCK
+
+  GuardrailV1:
+    Type: AWS::Bedrock::GuardrailVersion
+    Properties:
+      GuardrailIdentifier: !GetAtt Guardrail.GuardrailId
+      Description: First published version
+
+Outputs:
+  GuardrailId:
+    Description: ID of the guardrail
+    Value: !GetAtt Guardrail.GuardrailId
+
+  GuardrailArn:
+    Description: ARN of the guardrail
+    Value: !GetAtt Guardrail.GuardrailArn
+
+  GuardrailVersion:
+    Description: Published version number
+    Value: !GetAtt GuardrailV1.Version
