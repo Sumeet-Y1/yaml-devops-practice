@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom EventBridge event bus, an archive that stores events for
+  replay, and a rule that routes order events to an SQS queue.
+
+Resources:
+  OrdersBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-orders-bus'
+
+  OrdersArchive:
+    Type: AWS::Events::Archive
+    Properties:
+      ArchiveName: !Sub '${AWS::StackName}-orders-archive'
+      Description: Keeps order events for 7 days so they can be replayed
+      SourceArn: !GetAtt OrdersBus.Arn
+      RetentionDays: 7
+      EventPattern:
+        source:
+          - app.orders
+
+  OrderQueue:
+    Type: AWS::SQS::Queue
+
+  OrderCreatedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-order-created'
+      EventBusName: !Ref OrdersBus
+      EventPattern:
+        source:
+          - app.orders
+        detail-type:
+          - OrderCreated
+      Targets:
+        - Id: OrderQueueTarget
+          Arn: !GetAtt OrderQueue.Arn
+
+  OrderQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref OrderQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt OrderQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt OrderCreatedRule.Arn
+
+Outputs:
+  EventBusName:
+    Description: Publish events to this bus
+    Value: !Ref OrdersBus
+
+  ArchiveArn:
+    Description: ARN of the archive (start a replay from the console or CLI)
+    Value: !GetAtt OrdersArchive.Arn
+
+  OrderQueueUrl:
+    Description: Queue that receives OrderCreated events
+    Value: !Ref OrderQueue
