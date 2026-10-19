@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Synthetics canary that checks a website every five
+  minutes, stores artifacts in S3, and raises an alarm when success drops.
+
+Parameters:
+  CanaryName:
+    Type: String
+    Default: practice-canary
+    AllowedPattern: '[a-z0-9_-]{1,21}'
+    Description: Canary name (max 21 chars, lowercase)
+
+  TargetUrl:
+    Type: String
+    Default: https://example.com
+    Description: URL the canary checks
+
+Resources:
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CanaryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CanaryAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${ArtifactBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListAllMyBuckets
+                Resource: '*'
+              - Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: CloudWatchSynthetics
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  Canary:
+    Type: AWS::Synthetics::Canary
+    Properties:
+      Name: !Ref CanaryName
+      ExecutionRoleArn: !GetAtt CanaryRole.Arn
+      ArtifactS3Location: !Sub 's3://${ArtifactBucket}/canary'
+      RuntimeVersion: syn-nodejs-puppeteer-9.1
+      StartCanaryAfterCreation: true
+      SuccessRetentionPeriod: 7
+      FailureRetentionPeriod: 14
+      Schedule:
+        Expression: rate(5 minutes)
+      Code:
+        Handler: index.handler
+        Script: !Sub |
+          const synthetics = require('Synthetics');
+
+          const checkSite = async function () {
+            const page = await synthetics.getPage();
+            const response = await page.goto('${TargetUrl}', {
+              waitUntil: 'domcontentloaded',
+              timeout: 30000
+            });
+            if (response.status() !== 200) {
+              throw new Error('Unexpected status: ' + response.status());
+            }
+          };
+
+          exports.handler = async () => {
+            return await checkSite();
+          };
+
+  SuccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${CanaryName}-success-low'
+      Namespace: CloudWatchSynthetics
+      MetricName: SuccessPercent
+      Dimensions:
+        - Name: CanaryName
+          Value: !Ref Canary
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+Outputs:
+  CanaryName:
+    Description: Name of the canary
+    Value: !Ref Canary
+
+  ArtifactBucketName:
+    Description: Screenshots and logs are stored here
+    Value: !Ref ArtifactBucket
