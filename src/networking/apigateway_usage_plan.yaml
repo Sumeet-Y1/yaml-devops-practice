@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an API Gateway REST API with a mock endpoint that requires an
+  API key, plus a usage plan with throttling and a daily quota.
+
+Resources:
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-keyed-api'
+
+  PingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: ping
+
+  PingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PingResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: '{"message": "pong"}'
+      MethodResponses:
+        - StatusCode: '200'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PingMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+  ClientApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub '${AWS::StackName}-client-key'
+      Enabled: true
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub '${AWS::StackName}-basic-plan'
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: !Ref ProdStage
+      Throttle:
+        RateLimit: 10
+        BurstLimit: 20
+      Quota:
+        Limit: 1000
+        Period: DAY
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ClientApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+Outputs:
+  PingUrl:
+    Description: Call with the x-api-key header
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/ping'
+
+  ApiKeyId:
+    Description: ID of the API key (read its value in the console or CLI)
+    Value: !Ref ClientApiKey
