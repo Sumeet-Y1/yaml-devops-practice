@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Verified Permissions policy store with a static Cedar
+  policy and a reusable policy template for fine-grained authorization.
+
+Resources:
+  PolicyStore:
+    Type: AWS::VerifiedPermissions::PolicyStore
+    Properties:
+      Description: Practice store for document access rules
+      ValidationSettings:
+        Mode: 'OFF'
+
+  AdminsReadPolicy:
+    Type: AWS::VerifiedPermissions::Policy
+    Properties:
+      PolicyStoreId: !Ref PolicyStore
+      Definition:
+        Static:
+          Description: Admins can read any document
+          Statement: |
+            permit(
+              principal in UserGroup::"admins",
+              action == Action::"ReadDocument",
+              resource
+            );
+
+  ShareDocumentTemplate:
+    Type: AWS::VerifiedPermissions::PolicyTemplate
+    Properties:
+      PolicyStoreId: !Ref PolicyStore
+      Description: Share one document with one user
+      Statement: |
+        permit(
+          principal == ?principal,
+          action == Action::"ReadDocument",
+          resource == ?resource
+        );
+
+Outputs:
+  PolicyStoreId:
+    Description: ID of the policy store
+    Value: !Ref PolicyStore
+
+  PolicyStoreArn:
+    Description: ARN of the policy store
+    Value: !GetAtt PolicyStore.Arn
