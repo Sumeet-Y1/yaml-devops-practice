@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates Route 53 Resolver inbound and outbound endpoints for hybrid DNS,
+  plus a forwarding rule that sends corp.example.com queries to on-premises DNS.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the resolver endpoints
+
+  SubnetIdA:
+    Type: AWS::EC2::Subnet::Id
+    Description: First subnet (Availability Zone A)
+
+  SubnetIdB:
+    Type: AWS::EC2::Subnet::Id
+    Description: Second subnet (a different Availability Zone)
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing DNS (TCP and UDP 53)
+
+  OnPremDnsIp:
+    Type: String
+    Default: 192.168.1.10
+    Description: IP of the on-premises DNS server
+
+  ForwardDomain:
+    Type: String
+    Default: corp.example.com
+    Description: Domain to forward to on-premises DNS
+
+Resources:
+  InboundEndpoint:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-inbound'
+      Direction: INBOUND
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      IpAddresses:
+        - SubnetId: !Ref SubnetIdA
+        - SubnetId: !Ref SubnetIdB
+
+  OutboundEndpoint:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-outbound'
+      Direction: OUTBOUND
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      IpAddresses:
+        - SubnetId: !Ref SubnetIdA
+        - SubnetId: !Ref SubnetIdB
+
+  ForwardRule:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      Name: !Sub '${AWS::StackName}-forward-corp'
+      RuleType: FORWARD
+      DomainName: !Ref ForwardDomain
+      ResolverEndpointId: !Ref OutboundEndpoint
+      TargetIps:
+        - Ip: !Ref OnPremDnsIp
+          Port: '53'
+
+  RuleAssociation:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      ResolverRuleId: !Ref ForwardRule
+      VPCId: !Ref VpcId
+
+Outputs:
+  InboundEndpointId:
+    Description: Point on-premises DNS forwarders at this endpoint's IPs
+    Value: !Ref InboundEndpoint
+
+  OutboundEndpointId:
+    Description: Outbound endpoint used by the forwarding rule
+    Value: !Ref OutboundEndpoint
+
+  ForwardRuleId:
+    Description: ID of the forwarding rule
+    Value: !Ref ForwardRule
