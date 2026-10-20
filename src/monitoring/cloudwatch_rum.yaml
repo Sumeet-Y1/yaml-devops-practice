@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch RUM (Real User Monitoring) app monitor that collects
+  errors, performance, and HTTP telemetry from a website.
+
+Parameters:
+  AppDomain:
+    Type: String
+    Default: www.example.com
+    Description: Domain of the website to monitor
+
+Resources:
+  WebAppMonitor:
+    Type: AWS::RUM::AppMonitor
+    Properties:
+      Name: !Sub '${AWS::StackName}-web-monitor'
+      Domain: !Ref AppDomain
+      CwLogEnabled: true
+      AppMonitorConfiguration:
+        AllowCookies: true
+        EnableXRay: false
+        SessionSampleRate: 1
+        Telemetries:
+          - errors
+          - performance
+          - http
+
+Outputs:
+  AppMonitorId:
+    Description: Use this ID in the RUM web client snippet
+    Value: !GetAtt WebAppMonitor.Id
+
+  AppMonitorName:
+    Description: Name of the app monitor
+    Value: !Ref WebAppMonitor
