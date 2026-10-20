@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Lightsail instance running nginx, opens HTTP, and
+  attaches a static IP so the address survives restarts.
+
+Resources:
+  WebInstance:
+    Type: AWS::Lightsail::Instance
+    Properties:
+      InstanceName: !Sub '${AWS::StackName}-web'
+      BlueprintId: amazon_linux_2023
+      BundleId: nano_3_0
+      AvailabilityZone: !Select [0, !GetAZs '']
+      UserData: |
+        #!/bin/bash
+        dnf install -y nginx
+        systemctl enable --now nginx
+      Networking:
+        Ports:
+          - FromPort: 80
+            ToPort: 80
+            Protocol: tcp
+          - FromPort: 22
+            ToPort: 22
+            Protocol: tcp
+
+  WebStaticIp:
+    Type: AWS::Lightsail::StaticIp
+    Properties:
+      StaticIpName: !Sub '${AWS::StackName}-ip'
+      AttachedTo: !Ref WebInstance
+
+Outputs:
+  InstanceName:
+    Description: Name of the Lightsail instance
+    Value: !Ref WebInstance
+
+  StaticIpAddress:
+    Description: Public IP of the instance
+    Value: !GetAtt WebStaticIp.IpAddress
