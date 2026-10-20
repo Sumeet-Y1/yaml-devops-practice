@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Lambda function with a published version, a "live" alias that
+  keeps provisioned concurrency warm, and async invoke retry settings.
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  AppFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 200, "body": "hello from the live alias"}
+
+  AppVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref AppFunction
+      Description: Immutable published version
+
+  LiveAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref AppFunction
+      FunctionVersion: !GetAtt AppVersion.Version
+      Name: live
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 2
+
+  AsyncConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    DependsOn: LiveAlias
+    Properties:
+      FunctionName: !Ref AppFunction
+      Qualifier: live
+      MaximumRetryAttempts: 1
+      MaximumEventAgeInSeconds: 3600
+
+Outputs:
+  AliasArn:
+    Description: Invoke this ARN so traffic always hits the live alias
+    Value: !Ref LiveAlias
+
+  PublishedVersion:
+    Description: Version number the alias points to
+    Value: !GetAtt AppVersion.Version
