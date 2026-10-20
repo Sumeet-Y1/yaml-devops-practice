@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates two CloudTrail Lake event data stores: one for management events
+  and one for S3 data events, both queryable with SQL.
+
+Resources:
+  ManagementEventStore:
+    Type: AWS::CloudTrail::EventDataStore
+    Properties:
+      Name: !Sub '${AWS::StackName}-management-events'
+      MultiRegionEnabled: true
+      OrganizationEnabled: false
+      RetentionPeriod: 90
+      TerminationProtectionEnabled: false
+      AdvancedEventSelectors:
+        - Name: Management events
+          FieldSelectors:
+            - Field: eventCategory
+              Equals:
+                - Management
+
+  S3DataEventStore:
+    Type: AWS::CloudTrail::EventDataStore
+    Properties:
+      Name: !Sub '${AWS::StackName}-s3-data-events'
+      MultiRegionEnabled: false
+      RetentionPeriod: 30
+      TerminationProtectionEnabled: false
+      AdvancedEventSelectors:
+        - Name: S3 object-level events
+          FieldSelectors:
+            - Field: eventCategory
+              Equals:
+                - Data
+            - Field: resources.type
+              Equals:
+                - AWS::S3::Object
+
+Outputs:
+  ManagementEventStoreArn:
+    Description: ARN of the management events data store
+    Value: !GetAtt ManagementEventStore.EventDataStoreArn
+
+  S3DataEventStoreArn:
+    Description: ARN of the S3 data events data store
+    Value: !GetAtt S3DataEventStore.EventDataStoreArn
