@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EventBridge connection and API destination that forward order
+  events to an external HTTPS webhook using an API key.
+
+Parameters:
+  WebhookUrl:
+    Type: String
+    Default: https://example.com/webhook
+    Description: HTTPS endpoint that receives the events
+
+  ApiKeyValue:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: API key sent in the x-api-key header
+
+Resources:
+  WebhookConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: !Sub '${AWS::StackName}-connection'
+      Description: API key connection for the webhook
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: x-api-key
+          ApiKeyValue: !Ref ApiKeyValue
+
+  WebhookDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub '${AWS::StackName}-destination'
+      ConnectionArn: !GetAtt WebhookConnection.Arn
+      InvocationEndpoint: !Ref WebhookUrl
+      HttpMethod: POST
+      InvocationRateLimitPerSecond: 5
+
+  InvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeApiDestination
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt WebhookDestination.Arn
+
+  OrderEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-order-events'
+      EventPattern:
+        source:
+          - app.orders
+      Targets:
+        - Id: WebhookTarget
+          Arn: !GetAtt WebhookDestination.Arn
+          RoleArn: !GetAtt InvokeRole.Arn
+
+Outputs:
+  ApiDestinationArn:
+    Description: ARN of the API destination
+    Value: !GetAtt WebhookDestination.Arn
+
+  ConnectionArn:
+    Description: ARN of the connection
+    Value: !GetAtt WebhookConnection.Arn
