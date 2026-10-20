@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Managed Grafana workspace with IAM Identity Center
+  sign-in and CloudWatch, Prometheus, and X-Ray data sources enabled.
+
+Parameters:
+  WorkspaceName:
+    Type: String
+    Default: practice-grafana
+    Description: Name of the Grafana workspace
+
+Resources:
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      Name: !Ref WorkspaceName
+      Description: Dashboards for practice metrics
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      PermissionType: SERVICE_MANAGED
+      DataSources:
+        - CLOUDWATCH
+        - PROMETHEUS
+        - XRAY
+      NotificationDestinations:
+        - SNS
+
+Outputs:
+  WorkspaceId:
+    Description: ID of the Grafana workspace
+    Value: !GetAtt GrafanaWorkspace.Id
+
+  WorkspaceEndpoint:
+    Description: URL of the Grafana workspace
+    Value: !GetAtt GrafanaWorkspace.Endpoint
