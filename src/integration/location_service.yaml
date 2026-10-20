@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates Amazon Location Service resources: a map, a place index for
+  geocoding, a tracker for device positions, and a geofence collection.
+
+Resources:
+  AppMap:
+    Type: AWS::Location::Map
+    Properties:
+      MapName: !Sub '${AWS::StackName}-map'
+      Description: Navigation-style vector map
+      Configuration:
+        Style: VectorEsriNavigation
+
+  PlaceIndex:
+    Type: AWS::Location::PlaceIndex
+    Properties:
+      IndexName: !Sub '${AWS::StackName}-places'
+      DataSource: Esri
+      Description: Search and geocoding index
+
+  DeviceTracker:
+    Type: AWS::Location::Tracker
+    Properties:
+      TrackerName: !Sub '${AWS::StackName}-tracker'
+      Description: Stores device location history
+
+  GeofenceCollection:
+    Type: AWS::Location::GeofenceCollection
+    Properties:
+      CollectionName: !Sub '${AWS::StackName}-geofences'
+      Description: Geofences for delivery zones
+
+Outputs:
+  MapArn:
+    Description: ARN of the map
+    Value: !GetAtt AppMap.Arn
+
+  PlaceIndexArn:
+    Description: ARN of the place index
+    Value: !GetAtt PlaceIndex.Arn
+
+  TrackerArn:
+    Description: ARN of the tracker
+    Value: !GetAtt DeviceTracker.Arn
+
+  GeofenceCollectionArn:
+    Description: ARN of the geofence collection
+    Value: !GetAtt GeofenceCollection.Arn
