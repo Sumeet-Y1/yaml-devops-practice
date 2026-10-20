@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EC2 Fleet that maintains two Spot instances across several
+  instance types using the price-capacity-optimized allocation strategy.
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the instances
+
+Resources:
+  FleetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-fleet-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        MetadataOptions:
+          HttpTokens: required
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${AWS::StackName}-spot'
+
+  SpotFleet:
+    Type: AWS::EC2::EC2Fleet
+    Properties:
+      Type: maintain
+      ReplaceUnhealthyInstances: true
+      ExcessCapacityTerminationPolicy: termination
+      TargetCapacitySpecification:
+        TotalTargetCapacity: 2
+        DefaultTargetCapacityType: spot
+      SpotOptions:
+        AllocationStrategy: price-capacity-optimized
+      LaunchTemplateConfigs:
+        - LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref FleetLaunchTemplate
+            Version: !GetAtt FleetLaunchTemplate.LatestVersionNumber
+          Overrides:
+            - InstanceType: t3.micro
+              SubnetId: !Ref SubnetId
+            - InstanceType: t3a.micro
+              SubnetId: !Ref SubnetId
+            - InstanceType: t2.micro
+              SubnetId: !Ref SubnetId
+
+Outputs:
+  FleetId:
+    Description: ID of the EC2 Fleet
+    Value: !Ref SpotFleet
+
+  LaunchTemplateId:
+    Description: Launch template used by the fleet
+    Value: !Ref FleetLaunchTemplate
