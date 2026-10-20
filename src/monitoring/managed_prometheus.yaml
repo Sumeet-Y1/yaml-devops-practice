@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Managed Service for Prometheus workspace and a rule
+  groups namespace containing a recording rule.
+
+Parameters:
+  WorkspaceAlias:
+    Type: String
+    Default: practice-prometheus
+    Description: Friendly name for the workspace
+
+Resources:
+  PrometheusWorkspace:
+    Type: AWS::APS::Workspace
+    Properties:
+      Alias: !Ref WorkspaceAlias
+      Tags:
+        - Key: Purpose
+          Value: metrics-practice
+
+  RecordingRules:
+    Type: AWS::APS::RuleGroupsNamespace
+    Properties:
+      Name: practice-rules
+      Workspace: !GetAtt PrometheusWorkspace.Arn
+      Data: |
+        groups:
+          - name: http-recording-rules
+            interval: 60s
+            rules:
+              - record: job:http_requests:rate5m
+                expr: sum(rate(http_requests_total[5m])) by (job)
+
+Outputs:
+  WorkspaceArn:
+    Description: ARN of the workspace
+    Value: !GetAtt PrometheusWorkspace.Arn
+
+  PrometheusEndpoint:
+    Description: Endpoint for remote write and queries
+    Value: !GetAtt PrometheusWorkspace.PrometheusEndpoint
