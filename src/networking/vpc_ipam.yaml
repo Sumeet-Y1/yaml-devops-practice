@@ -28,7 +28,6 @@ Resources:
 
   AllocatedVpc:
     Type: AWS::EC2::VPC
-    DependsOn: PrivatePool
     Properties:
       Ipv4IpamPoolId: !Ref PrivatePool
       Ipv4NetmaskLength: 24

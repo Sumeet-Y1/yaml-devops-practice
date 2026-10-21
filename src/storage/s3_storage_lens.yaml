@@ -29,4 +29,4 @@ Resources:
 Outputs:
   StorageLensArn:
     Description: ARN of the Storage Lens configuration
-    Value: !GetAtt StorageLensDashboard.StorageLensArn
+    Value: !GetAtt StorageLensDashboard.StorageLensConfiguration.StorageLensArn

@@ -63,4 +63,4 @@ Outputs:
 
   ClusterPort:
     Description: Cluster port
-    Value: !GetAtt MemoryDbCluster.ClusterEndpoint.Port
+    Value: !Sub '${MemoryDbCluster.ClusterEndpoint.Port}'

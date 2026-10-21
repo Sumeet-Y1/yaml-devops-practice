@@ -24,8 +24,7 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-rule-group'
       FirewallRules:
-        - Name: block-bad-domains
-          FirewallDomainListId: !Ref BlockedDomains
+        - FirewallDomainListId: !Ref BlockedDomains
           Priority: 100
           Action: BLOCK
           BlockResponse: NXDOMAIN

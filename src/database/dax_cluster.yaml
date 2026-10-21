@@ -64,4 +64,4 @@ Outputs:
 
   ClusterArn:
     Description: ARN of the DAX cluster
-    Value: !GetAtt DaxCluster.ClusterArn
+    Value: !GetAtt DaxCluster.Arn

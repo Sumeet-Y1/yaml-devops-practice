@@ -53,7 +53,7 @@ Resources:
       FindingCriteria:
         Criterion:
           severity.description:
-            Eq:
+            eq:
               - Low
 
 Outputs:
