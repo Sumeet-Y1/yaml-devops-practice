@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Lets GitHub Actions assume an AWS role using OpenID Connect, so workflows
+  need no stored access keys. Trust is limited to one repo and branch.
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub username or organization
+
+  GitHubRepo:
+    Type: String
+    Description: Repository name
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Branch allowed to assume the role
+
+  CreateOidcProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Set to false if this account already has the GitHub OIDC provider
+
+  ExistingProviderArn:
+    Type: String
+    Default: ''
+    Description: ARN of the existing GitHub OIDC provider (only if CreateOidcProvider is false)
+
+Conditions:
+  CreateProvider: !Equals [!Ref CreateOidcProvider, 'true']
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-github-actions'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateProvider, !Ref GitHubOidcProvider, !Ref ExistingProviderArn]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+Outputs:
+  RoleArn:
+    Description: Use this in the role-to-assume field of aws-actions/configure-aws-credentials
+    Value: !GetAtt GitHubActionsRole.Arn
