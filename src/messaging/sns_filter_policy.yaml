@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an SNS topic with two SQS subscriptions that use filter policies,
+  so each queue only receives the message types it cares about.
+
+Resources:
+  EventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-order-events'
+
+  OrderPlacedQueue:
+    Type: AWS::SQS::Queue
+
+  OrderRefundedQueue:
+    Type: AWS::SQS::Queue
+
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref OrderPlacedQueue
+        - !Ref OrderRefundedQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref EventsTopic
+
+  PlacedSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt OrderPlacedQueue.Arn
+      RawMessageDelivery: true
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        eventType:
+          - order_placed
+
+  RefundedSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt OrderRefundedQueue.Arn
+      RawMessageDelivery: true
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        eventType:
+          - order_refunded
+
+Outputs:
+  TopicArn:
+    Description: Publish with a message attribute named eventType
+    Value: !Ref EventsTopic
+
+  OrderPlacedQueueUrl:
+    Description: Receives only order_placed messages
+    Value: !Ref OrderPlacedQueue
+
+  OrderRefundedQueueUrl:
+    Description: Receives only order_refunded messages
+    Value: !Ref OrderRefundedQueue
