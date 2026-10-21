@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Database Migration Service setup: replication instance,
+  MySQL source endpoint, S3 target endpoint, and a full-load replication task.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in at least two Availability Zones
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group for the replication instance
+
+  SourceHost:
+    Type: String
+    Description: Hostname of the source MySQL database
+
+  SourceUsername:
+    Type: String
+    Default: admin
+    Description: Source database username
+
+  SourcePassword:
+    Type: String
+    NoEcho: true
+    Description: Source database password
+
+Resources:
+  TargetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DmsS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: dms.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteToTargetBucket
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:PutObjectTagging
+                Resource: !Sub '${TargetBucket.Arn}/*'
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt TargetBucket.Arn
+
+  ReplicationSubnetGroup:
+    Type: AWS::DMS::ReplicationSubnetGroup
+    Properties:
+      ReplicationSubnetGroupDescription: Subnets for the DMS replication instance
+      SubnetIds: !Ref SubnetIds
+
+  ReplicationInstance:
+    Type: AWS::DMS::ReplicationInstance
+    Properties:
+      ReplicationInstanceClass: dms.t3.micro
+      AllocatedStorage: 20
+      MultiAZ: false
+      PubliclyAccessible: false
+      ReplicationSubnetGroupIdentifier: !Ref ReplicationSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroupId
+
+  SourceEndpoint:
+    Type: AWS::DMS::Endpoint
+    Properties:
+      EndpointType: source
+      EngineName: mysql
+      ServerName: !Ref SourceHost
+      Port: 3306
+      Username: !Ref SourceUsername
+      Password: !Ref SourcePassword
+
+  TargetEndpoint:
+    Type: AWS::DMS::Endpoint
+    Properties:
+      EndpointType: target
+      EngineName: s3
+      S3Settings:
+        BucketName: !Ref TargetBucket
+        BucketFolder: dms-output
+        ServiceAccessRoleArn: !GetAtt DmsS3Role.Arn
+
+  ReplicationTask:
+    Type: AWS::DMS::ReplicationTask
+    Properties:
+      MigrationType: full-load
+      ReplicationInstanceArn: !Ref ReplicationInstance
+      SourceEndpointArn: !Ref SourceEndpoint
+      TargetEndpointArn: !Ref TargetEndpoint
+      TableMappings: |
+        {
+          "rules": [
+            {
+              "rule-type": "selection",
+              "rule-id": "1",
+              "rule-name": "include-all",
+              "object-locator": { "schema-name": "%", "table-name": "%" },
+              "rule-action": "include"
+            }
+          ]
+        }
+
+Outputs:
+  ReplicationInstanceArn:
+    Description: ARN of the replication instance
+    Value: !Ref ReplicationInstance
+
+  ReplicationTaskArn:
+    Description: ARN of the replication task
+    Value: !Ref ReplicationTask
+
+  TargetBucketName:
+    Description: Bucket that receives migrated data
+    Value: !Ref TargetBucket
