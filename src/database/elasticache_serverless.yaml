@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon ElastiCache Serverless cache (Valkey) with usage limits,
+  daily snapshots, and VPC placement. No node sizing required.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the cache
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 6379 from clients
+
+Resources:
+  ServerlessCache:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      ServerlessCacheName: !Sub '${AWS::StackName}-cache'
+      Description: Serverless Valkey cache for practice
+      Engine: valkey
+      MajorEngineVersion: '7'
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      CacheUsageLimits:
+        DataStorage:
+          Maximum: 5
+          Unit: GB
+        ECPUPerSecond:
+          Maximum: 5000
+      DailySnapshotTime: '03:00'
+      SnapshotRetentionLimit: 1
+
+Outputs:
+  CacheEndpoint:
+    Description: Endpoint address
+    Value: !GetAtt ServerlessCache.Endpoint.Address
+
+  CachePort:
+    Description: Endpoint port
+    Value: !GetAtt ServerlessCache.Endpoint.Port
