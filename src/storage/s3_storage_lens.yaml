@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an S3 Storage Lens dashboard configuration that tracks usage and
+  activity metrics for all buckets in the account.
+
+Parameters:
+  DashboardId:
+    Type: String
+    Default: practice-storage-lens
+    Description: Dashboard ID (letters, numbers, hyphens, underscores, periods)
+
+Resources:
+  StorageLensDashboard:
+    Type: AWS::S3::StorageLens
+    Properties:
+      StorageLensConfiguration:
+        Id: !Ref DashboardId
+        IsEnabled: true
+        AccountLevel:
+          ActivityMetrics:
+            IsEnabled: true
+          BucketLevel:
+            ActivityMetrics:
+              IsEnabled: true
+      Tags:
+        - Key: Purpose
+          Value: storage-visibility
+
+Outputs:
+  StorageLensArn:
+    Description: ARN of the Storage Lens configuration
+    Value: !GetAtt StorageLensDashboard.StorageLensArn
