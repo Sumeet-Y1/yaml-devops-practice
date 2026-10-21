@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Network Manager global network that models an on-premises
+  site, a device, and a link, then associates the device with the link.
+
+Resources:
+  GlobalNetwork:
+    Type: AWS::NetworkManager::GlobalNetwork
+    Properties:
+      Description: Practice global network
+
+  OfficeSite:
+    Type: AWS::NetworkManager::Site
+    Properties:
+      GlobalNetworkId: !GetAtt GlobalNetwork.Id
+      Description: Head office
+      Location:
+        Address: Pune, Maharashtra, India
+        Latitude: '18.5204'
+        Longitude: '73.8567'
+
+  EdgeRouter:
+    Type: AWS::NetworkManager::Device
+    Properties:
+      GlobalNetworkId: !GetAtt GlobalNetwork.Id
+      SiteId: !GetAtt OfficeSite.SiteId
+      Description: Edge router at the head office
+      Type: router
+      Vendor: Example
+      Model: ER-100
+
+  IspLink:
+    Type: AWS::NetworkManager::Link
+    Properties:
+      GlobalNetworkId: !GetAtt GlobalNetwork.Id
+      SiteId: !GetAtt OfficeSite.SiteId
+      Description: Primary internet link
+      Type: broadband
+      Provider: ExampleISP
+      Bandwidth:
+        UploadSpeed: 100
+        DownloadSpeed: 200
+
+  DeviceLinkAssociation:
+    Type: AWS::NetworkManager::LinkAssociation
+    Properties:
+      GlobalNetworkId: !GetAtt GlobalNetwork.Id
+      DeviceId: !GetAtt EdgeRouter.DeviceId
+      LinkId: !GetAtt IspLink.LinkId
+
+Outputs:
+  GlobalNetworkId:
+    Description: ID of the global network
+    Value: !GetAtt GlobalNetwork.Id
+
+  SiteId:
+    Description: ID of the site
+    Value: !GetAtt OfficeSite.SiteId
