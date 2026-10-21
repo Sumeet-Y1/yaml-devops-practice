@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CodeStar Notifications rule that emails you through SNS when
+  an existing CodePipeline execution succeeds or fails.
+
+Parameters:
+  PipelineArn:
+    Type: String
+    Description: ARN of the CodePipeline to watch
+
+  AlertEmail:
+    Type: String
+    Description: Email address that receives notifications
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-pipeline-events'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  NotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref NotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCodeStarNotifications
+            Effect: Allow
+            Principal:
+              Service: codestar-notifications.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref NotificationTopic
+
+  PipelineNotificationRule:
+    Type: AWS::CodeStarNotifications::NotificationRule
+    DependsOn: NotificationTopicPolicy
+    Properties:
+      Name: !Sub '${AWS::StackName}-pipeline-rule'
+      DetailType: FULL
+      Resource: !Ref PipelineArn
+      Status: ENABLED
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-succeeded
+        - codepipeline-pipeline-pipeline-execution-failed
+      Targets:
+        - TargetType: SNS
+          TargetAddress: !Ref NotificationTopic
+
+Outputs:
+  NotificationRuleArn:
+    Description: ARN of the notification rule
+    Value: !Ref PipelineNotificationRule
+
+  TopicArn:
+    Description: SNS topic that receives the events
+    Value: !Ref NotificationTopic
