@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudFront Function that adds security headers to every
+  response, and a distribution that runs it on viewer responses.
+
+Parameters:
+  OriginDomain:
+    Type: String
+    Default: example.com
+    Description: Domain name of the HTTPS origin
+
+Resources:
+  SecurityHeadersFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-security-headers'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Add security headers to responses
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var response = event.response;
+          var headers = response.headers;
+          headers['strict-transport-security'] = { value: 'max-age=31536000; includeSubdomains; preload' };
+          headers['x-content-type-options'] = { value: 'nosniff' };
+          headers['x-frame-options'] = { value: 'DENY' };
+          headers['referrer-policy'] = { value: 'strict-origin-when-cross-origin' };
+          return response;
+        }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Distribution that runs a CloudFront Function
+        Origins:
+          - Id: main-origin
+            DomainName: !Ref OriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: main-origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          FunctionAssociations:
+            - EventType: viewer-response
+              FunctionARN: !GetAtt SecurityHeadersFunction.FunctionMetadata.FunctionARN
+
+Outputs:
+  DistributionDomain:
+    Description: CloudFront domain name
+    Value: !GetAtt Distribution.DomainName
+
+  FunctionArn:
+    Description: ARN of the CloudFront Function
+    Value: !GetAtt SecurityHeadersFunction.FunctionMetadata.FunctionARN
