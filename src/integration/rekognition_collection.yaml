@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Rekognition face collection and a Custom Labels project,
+  plus a least-privilege IAM policy for indexing and searching faces.
+
+Parameters:
+  CollectionId:
+    Type: String
+    Default: practice-faces
+    AllowedPattern: '[a-zA-Z0-9_.\-]+'
+    Description: ID of the face collection
+
+Resources:
+  FaceCollection:
+    Type: AWS::Rekognition::Collection
+    Properties:
+      CollectionId: !Ref CollectionId
+
+  CustomLabelsProject:
+    Type: AWS::Rekognition::Project
+    Properties:
+      ProjectName: !Sub '${AWS::StackName}-labels'
+
+  FaceAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Index and search faces in one collection only
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - rekognition:IndexFaces
+              - rekognition:SearchFacesByImage
+              - rekognition:ListFaces
+            Resource: !GetAtt FaceCollection.Arn
+
+Outputs:
+  CollectionArn:
+    Description: ARN of the face collection
+    Value: !GetAtt FaceCollection.Arn
+
+  ProjectArn:
+    Description: ARN of the Custom Labels project
+    Value: !GetAtt CustomLabelsProject.Arn
+
+  FaceAccessPolicyArn:
+    Description: Attach this policy to the role that calls Rekognition
+    Value: !Ref FaceAccessPolicy
