@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates the three EC2 placement group strategies: cluster (low latency),
+  spread (isolated hardware), and partition (large distributed systems).
+
+Resources:
+  ClusterGroup:
+    Type: AWS::EC2::PlacementGroup
+    Properties:
+      Strategy: cluster
+
+  SpreadGroup:
+    Type: AWS::EC2::PlacementGroup
+    Properties:
+      Strategy: spread
+      SpreadLevel: rack
+
+  PartitionGroup:
+    Type: AWS::EC2::PlacementGroup
+    Properties:
+      Strategy: partition
+      PartitionCount: 3
+
+Outputs:
+  ClusterGroupName:
+    Description: Best for HPC and tightly coupled workloads
+    Value: !Ref ClusterGroup
+
+  SpreadGroupName:
+    Description: Best for a small number of critical instances
+    Value: !Ref SpreadGroup
+
+  PartitionGroupName:
+    Description: Best for Hadoop, Cassandra, and Kafka style workloads
+    Value: !Ref PartitionGroup
