@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an S3 Express One Zone directory bucket for single-digit
+  millisecond latency, stored in one Availability Zone.
+
+Parameters:
+  BucketBaseName:
+    Type: String
+    Default: practice-express
+    AllowedPattern: '[a-z0-9][a-z0-9-]{1,30}'
+    Description: Base name (the AZ ID and --x-s3 suffix are added automatically)
+
+  AvailabilityZoneId:
+    Type: String
+    Default: use1-az4
+    Description: AZ ID (not name) where the bucket lives, for example use1-az4 or aps1-az1
+
+Resources:
+  DirectoryBucket:
+    Type: AWS::S3Express::DirectoryBucket
+    Properties:
+      BucketName: !Sub '${BucketBaseName}--${AvailabilityZoneId}--x-s3'
+      DataRedundancy: SingleAvailabilityZone
+      LocationName: !Ref AvailabilityZoneId
+
+Outputs:
+  BucketName:
+    Description: Directory bucket name
+    Value: !Ref DirectoryBucket
+
+  BucketArn:
+    Description: ARN of the directory bucket
+    Value: !GetAtt DirectoryBucket.Arn
