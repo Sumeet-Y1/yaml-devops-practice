@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys an AWS Config conformance pack: a bundle of Config rules defined
+  in one inline template and managed as a single unit. Needs AWS Config enabled.
+
+Resources:
+  BasicHygienePack:
+    Type: AWS::Config::ConformancePack
+    Properties:
+      ConformancePackName: practice-basic-hygiene
+      TemplateBody: |
+        Resources:
+          S3VersioningEnabled:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: s3-bucket-versioning-enabled
+              Source:
+                Owner: AWS
+                SourceIdentifier: S3_BUCKET_VERSIONING_ENABLED
+          CloudTrailEnabled:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: cloudtrail-enabled
+              Source:
+                Owner: AWS
+                SourceIdentifier: CLOUD_TRAIL_ENABLED
+          IamPasswordPolicy:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: iam-password-policy
+              Source:
+                Owner: AWS
+                SourceIdentifier: IAM_PASSWORD_POLICY
+
+Outputs:
+  ConformancePackName:
+    Description: Name of the conformance pack
+    Value: !Ref BasicHygienePack
