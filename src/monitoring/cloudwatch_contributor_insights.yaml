@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Contributor Insights rule that finds the client IPs
+  causing the most 5xx errors, and a saved Logs Insights query for top errors.
+
+Resources:
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/api'
+      RetentionInDays: 7
+
+  TopErrorClientsRule:
+    Type: AWS::CloudWatch::InsightRule
+    Properties:
+      RuleName: !Sub '${AWS::StackName}-top-error-clients'
+      RuleState: ENABLED
+      RuleBody: !Sub |
+        {
+          "Schema": {"Name": "CloudWatchLogRule", "Version": 1},
+          "LogGroupNames": ["${ApiLogGroup}"],
+          "LogFormat": "JSON",
+          "Contribution": {
+            "Keys": ["$.clientIp"],
+            "Filters": [{"Match": "$.status", "GreaterThan": 499}]
+          },
+          "AggregateOn": "Count"
+        }
+
+  TopErrorsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'practice/${AWS::StackName}/top-errors'
+      LogGroupNames:
+        - !Ref ApiLogGroup
+      QueryString: |
+        fields @timestamp, status, path
+        | filter status >= 500
+        | stats count(*) as errors by path
+        | sort errors desc
+        | limit 10
+
+Outputs:
+  LogGroupName:
+    Description: Send JSON logs with clientIp and status fields here
+    Value: !Ref ApiLogGroup
+
+  InsightRuleName:
+    Description: Name of the Contributor Insights rule
+    Value: !Ref TopErrorClientsRule
