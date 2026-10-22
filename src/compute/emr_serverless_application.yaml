@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon EMR Serverless Spark application that starts on demand,
+  stops when idle, plus a job execution role and an S3 bucket for scripts and output.
+
+Resources:
+  JobBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  JobExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: emr-serverless.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: JobBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt JobBucket.Arn
+                  - !Sub '${JobBucket.Arn}/*'
+
+  SparkApplication:
+    Type: AWS::EMRServerless::Application
+    Properties:
+      Name: !Sub '${AWS::StackName}-spark'
+      ReleaseLabel: emr-7.1.0
+      Type: SPARK
+      AutoStartConfiguration:
+        Enabled: true
+      AutoStopConfiguration:
+        Enabled: true
+        IdleTimeoutMinutes: 15
+      MaximumCapacity:
+        Cpu: 16 vCPU
+        Memory: 64 GB
+        Disk: 200 GB
+
+Outputs:
+  ApplicationId:
+    Description: Use this ID when submitting job runs
+    Value: !GetAtt SparkApplication.ApplicationId
+
+  JobExecutionRoleArn:
+    Description: Role passed to each job run
+    Value: !GetAtt JobExecutionRole.Arn
+
+  JobBucketName:
+    Description: Bucket for scripts and output
+    Value: !Ref JobBucket
