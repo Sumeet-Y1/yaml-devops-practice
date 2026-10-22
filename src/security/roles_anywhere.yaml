@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sets up IAM Roles Anywhere so workloads outside AWS can get temporary
+  credentials with an X.509 certificate: a trust anchor, a role, and a profile.
+
+Parameters:
+  PcaArn:
+    Type: String
+    Description: ARN of the AWS Private CA that issues the workload certificates
+
+Resources:
+  RolesAnywhereTrustAnchor:
+    Type: AWS::RolesAnywhere::TrustAnchor
+    Properties:
+      Name: !Sub '${AWS::StackName}-anchor'
+      Enabled: true
+      Source:
+        SourceType: AWS_ACM_PCA
+        SourceData:
+          AcmPcaArn: !Ref PcaArn
+
+  OnPremRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rolesanywhere.amazonaws.com
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+              - sts:SetSourceIdentity
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt RolesAnywhereTrustAnchor.TrustAnchorArn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  OnPremProfile:
+    Type: AWS::RolesAnywhere::Profile
+    Properties:
+      Name: !Sub '${AWS::StackName}-profile'
+      Enabled: true
+      DurationSeconds: 3600
+      RoleArns:
+        - !GetAtt OnPremRole.Arn
+
+Outputs:
+  TrustAnchorArn:
+    Description: Trust anchor ARN for the credential helper
+    Value: !GetAtt RolesAnywhereTrustAnchor.TrustAnchorArn
+
+  ProfileArn:
+    Description: Profile ARN for the credential helper
+    Value: !GetAtt OnPremProfile.ProfileArn
+
+  RoleArn:
+    Description: Role the on-premises workload assumes
+    Value: !GetAtt OnPremRole.Arn
