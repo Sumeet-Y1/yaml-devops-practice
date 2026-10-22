@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Registers a CloudFormation macro backed by Lambda that adds a ManagedBy tag
+  to every S3 bucket in any template that uses Transform: AddTagsMacro.
+
+Parameters:
+  MacroName:
+    Type: String
+    Default: AddTagsMacro
+    Description: Name templates use in their Transform section
+
+Resources:
+  MacroRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  MacroFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt MacroRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              fragment = event["fragment"]
+              for name, resource in fragment.get("Resources", {}).items():
+                  if resource.get("Type") == "AWS::S3::Bucket":
+                      props = resource.setdefault("Properties", {})
+                      tags = props.setdefault("Tags", [])
+                      tags.append({"Key": "ManagedBy", "Value": "AddTagsMacro"})
+              return {
+                  "requestId": event["requestId"],
+                  "status": "success",
+                  "fragment": fragment
+              }
+
+  TagMacro:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: !Ref MacroName
+      Description: Adds a ManagedBy tag to every S3 bucket
+      FunctionName: !GetAtt MacroFunction.Arn
+
+Outputs:
+  MacroName:
+    Description: Use this value in the Transform section of other templates
+    Value: !Ref TagMacro
