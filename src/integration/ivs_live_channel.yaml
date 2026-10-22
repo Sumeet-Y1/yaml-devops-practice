@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Interactive Video Service (IVS) live streaming channel
+  with a stream key and automatic recording to S3.
+
+Resources:
+  RecordingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  RecordingConfig:
+    Type: AWS::IVS::RecordingConfiguration
+    Properties:
+      Name: !Sub '${AWS::StackName}-recording'
+      DestinationConfiguration:
+        S3:
+          BucketName: !Ref RecordingBucket
+
+  StreamChannel:
+    Type: AWS::IVS::Channel
+    Properties:
+      Name: !Sub '${AWS::StackName}-channel'
+      LatencyMode: LOW
+      Type: STANDARD
+      Authorized: false
+      RecordingConfigurationArn: !GetAtt RecordingConfig.Arn
+
+  ChannelStreamKey:
+    Type: AWS::IVS::StreamKey
+    Properties:
+      ChannelArn: !GetAtt StreamChannel.Arn
+
+Outputs:
+  IngestEndpoint:
+    Description: RTMPS ingest endpoint for your encoder (for example OBS)
+    Value: !GetAtt StreamChannel.IngestEndpoint
+
+  PlaybackUrl:
+    Description: URL viewers use to watch the stream
+    Value: !GetAtt StreamChannel.PlaybackUrl
+
+  RecordingBucketName:
+    Description: Recordings are saved here
+    Value: !Ref RecordingBucket
