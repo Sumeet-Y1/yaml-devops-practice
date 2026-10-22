@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Uses the AWS SAM transform to define a Lambda function, a REST API route,
+  and a DynamoDB table in a few lines instead of dozens of raw resources.
+
+Resources:
+  ItemsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+
+  ItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ItemsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ItemsTable
+      InlineCode: |
+        import json
+        import os
+        import boto3
+
+        table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
+
+        def handler(event, context):
+            items = table.scan().get("Items", [])
+            return {"statusCode": 200, "body": json.dumps(items, default=str)}
+      Events:
+        GetItems:
+          Type: Api
+          Properties:
+            Path: /items
+            Method: get
+
+Outputs:
+  ApiUrl:
+    Description: Call this URL to list items
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/items'
+
+  TableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref ItemsTable
