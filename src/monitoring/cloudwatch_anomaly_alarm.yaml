@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch anomaly detector for EC2 CPU and an alarm that fires
+  when CPU rises above the learned band instead of a fixed threshold.
+
+Parameters:
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+    Description: EC2 instance to watch
+
+Resources:
+  CpuAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Stat: Average
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+
+  CpuAnomalyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: CpuAnomalyDetector
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-cpu-anomaly'
+      AlarmDescription: CPU is above the expected band
+      ComparisonOperator: GreaterThanUpperThreshold
+      EvaluationPeriods: 2
+      ThresholdMetricId: band
+      TreatMissingData: notBreaching
+      Metrics:
+        - Id: cpu
+          ReturnData: true
+          MetricStat:
+            Metric:
+              Namespace: AWS/EC2
+              MetricName: CPUUtilization
+              Dimensions:
+                - Name: InstanceId
+                  Value: !Ref InstanceId
+            Period: 300
+            Stat: Average
+        - Id: band
+          Expression: ANOMALY_DETECTION_BAND(cpu, 2)
+          Label: Expected CPU band
+          ReturnData: true
+
+Outputs:
+  AlarmName:
+    Description: Name of the anomaly alarm
+    Value: !Ref CpuAnomalyAlarm
