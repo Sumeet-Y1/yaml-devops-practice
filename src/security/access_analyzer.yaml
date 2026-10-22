@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an IAM Access Analyzer for the account that reports resources
+  shared outside it, with an archive rule that hides findings from a trusted account.
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    Description: 12-digit account ID whose access findings should be archived automatically
+    AllowedPattern: '[0-9]{12}'
+
+Resources:
+  AccountAnalyzer:
+    Type: AWS::AccessAnalyzer::Analyzer
+    Properties:
+      AnalyzerName: !Sub '${AWS::StackName}-analyzer'
+      Type: ACCOUNT
+      ArchiveRules:
+        - RuleName: archive-trusted-account
+          Filter:
+            - Property: principal.AWS
+              Eq:
+                - !Ref TrustedAccountId
+      Tags:
+        - Key: Purpose
+          Value: external-access-review
+
+Outputs:
+  AnalyzerArn:
+    Description: ARN of the analyzer
+    Value: !GetAtt AccountAnalyzer.Arn
