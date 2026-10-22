@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a VPC Reachability Analyzer path from an EC2 instance to a
+  destination on TCP 443 and runs an analysis to check whether it is reachable.
+
+Parameters:
+  SourceInstanceId:
+    Type: AWS::EC2::Instance::Id
+    Description: Instance where the path starts
+
+  DestinationId:
+    Type: String
+    Description: ID of the destination, for example an internet gateway (igw-...) or another instance
+
+Resources:
+  ReachabilityPath:
+    Type: AWS::EC2::NetworkInsightsPath
+    Properties:
+      Source: !Ref SourceInstanceId
+      Destination: !Ref DestinationId
+      Protocol: tcp
+      DestinationPort: 443
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-https-path'
+
+  PathAnalysis:
+    Type: AWS::EC2::NetworkInsightsAnalysis
+    Properties:
+      NetworkInsightsPathId: !Ref ReachabilityPath
+
+Outputs:
+  PathId:
+    Description: ID of the Reachability Analyzer path
+    Value: !Ref ReachabilityPath
+
+  AnalysisId:
+    Description: ID of the analysis (check the result in the console or CLI)
+    Value: !Ref PathAnalysis
