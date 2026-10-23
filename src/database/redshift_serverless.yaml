@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Redshift Serverless namespace and workgroup with a
+  Secrets Manager managed admin password. No cluster sizing needed.
+
+Parameters:
+  NamespaceName:
+    Type: String
+    Default: practice-namespace
+    AllowedPattern: '[a-z0-9-]{3,64}'
+    Description: Namespace name (lowercase)
+
+  WorkgroupName:
+    Type: String
+    Default: practice-workgroup
+    AllowedPattern: '[a-z0-9-]{3,64}'
+    Description: Workgroup name (lowercase)
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in at least three Availability Zones
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 5439 from clients
+
+Resources:
+  Namespace:
+    Type: AWS::RedshiftServerless::Namespace
+    Properties:
+      NamespaceName: !Ref NamespaceName
+      DbName: analytics
+      AdminUsername: awsuser
+      ManageAdminPassword: true
+      LogExports:
+        - userlog
+        - connectionlog
+        - useractivitylog
+
+  Workgroup:
+    Type: AWS::RedshiftServerless::Workgroup
+    DependsOn: Namespace
+    Properties:
+      WorkgroupName: !Ref WorkgroupName
+      NamespaceName: !Ref NamespaceName
+      BaseCapacity: 8
+      PubliclyAccessible: false
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+
+Outputs:
+  WorkgroupEndpoint:
+    Description: Endpoint address for SQL clients
+    Value: !GetAtt Workgroup.Workgroup.Endpoint.Address
+
+  NamespaceArn:
+    Description: ARN of the namespace
+    Value: !GetAtt Namespace.Namespace.NamespaceArn
