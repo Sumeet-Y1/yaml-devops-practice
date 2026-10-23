@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Managed Workflows for Apache Airflow (MWAA) environment
+  with a versioned S3 DAG bucket, an execution role, and a self-referencing security group.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: practice-airflow
+    Description: Name of the Airflow environment
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the environment
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Two private subnets in different Availability Zones (with NAT for internet access)
+
+Resources:
+  DagBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  MwaaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MWAA environment security group
+      VpcId: !Ref VpcId
+
+  MwaaSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref MwaaSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref MwaaSecurityGroup
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - airflow.amazonaws.com
+                - airflow-env.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MwaaExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: airflow:PublishMetrics
+                Resource: !Sub 'arn:aws:airflow:${AWS::Region}:${AWS::AccountId}:environment/${EnvironmentName}'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                Resource:
+                  - !GetAtt DagBucket.Arn
+                  - !Sub '${DagBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                  - logs:GetLogEvents
+                  - logs:GetLogRecord
+                  - logs:GetLogGroupFields
+                  - logs:GetQueryResults
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:airflow-${EnvironmentName}-*'
+              - Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: '*'
+              - Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                Resource: !Sub 'arn:aws:sqs:${AWS::Region}:*:airflow-celery-*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:GenerateDataKey*
+                  - kms:Encrypt
+                NotResource: !Sub 'arn:aws:kms:*:${AWS::AccountId}:key/*'
+                Condition:
+                  StringLike:
+                    kms:ViaService: !Sub 'sqs.${AWS::Region}.amazonaws.com'
+
+  AirflowEnvironment:
+    Type: AWS::MWAA::Environment
+    Properties:
+      Name: !Ref EnvironmentName
+      AirflowVersion: 2.10.1
+      EnvironmentClass: mw1.small
+      MinWorkers: 1
+      MaxWorkers: 2
+      SourceBucketArn: !GetAtt DagBucket.Arn
+      DagS3Path: dags
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      WebserverAccessMode: PUBLIC_ONLY
+      NetworkConfiguration:
+        SecurityGroupIds:
+          - !Ref MwaaSecurityGroup
+        SubnetIds: !Ref SubnetIds
+      LoggingConfiguration:
+        TaskLogs:
+          Enabled: true
+          LogLevel: INFO
+        SchedulerLogs:
+          Enabled: true
+          LogLevel: WARNING
+
+Outputs:
+  DagBucketName:
+    Description: Upload DAG files under the dags/ prefix
+    Value: !Ref DagBucket
+
+  WebserverUrl:
+    Description: Airflow UI URL
+    Value: !GetAtt AirflowEnvironment.WebserverUrl
