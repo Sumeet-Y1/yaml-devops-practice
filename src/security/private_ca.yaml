@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Private Certificate Authority: a root CA, a self-signed
+  root certificate, and the activation that makes the CA ready to issue certificates.
+
+Parameters:
+  OrganizationName:
+    Type: String
+    Default: Practice Org
+    Description: Organization name in the CA subject
+
+  CommonName:
+    Type: String
+    Default: practice.internal
+    Description: Common name of the root CA
+
+Resources:
+  RootCa:
+    Type: AWS::ACMPCA::CertificateAuthority
+    Properties:
+      Type: ROOT
+      KeyAlgorithm: RSA_2048
+      SigningAlgorithm: SHA256WITHRSA
+      UsageMode: SHORT_LIVED_CERTIFICATE
+      Subject:
+        Organization: !Ref OrganizationName
+        Country: IN
+        CommonName: !Ref CommonName
+      RevocationConfiguration:
+        CrlConfiguration:
+          Enabled: false
+
+  RootCaCertificate:
+    Type: AWS::ACMPCA::Certificate
+    Properties:
+      CertificateAuthorityArn: !Ref RootCa
+      CertificateSigningRequest: !GetAtt RootCa.CertificateSigningRequest
+      SigningAlgorithm: SHA256WITHRSA
+      TemplateArn: arn:aws:acm-pca:::template/RootCACertificate/V1
+      Validity:
+        Type: YEARS
+        Value: 10
+
+  RootCaActivation:
+    Type: AWS::ACMPCA::CertificateAuthorityActivation
+    Properties:
+      CertificateAuthorityArn: !Ref RootCa
+      Certificate: !GetAtt RootCaCertificate.Certificate
+      Status: ACTIVE
+
+Outputs:
+  CertificateAuthorityArn:
+    Description: Use this ARN to issue private certificates
+    Value: !Ref RootCa
