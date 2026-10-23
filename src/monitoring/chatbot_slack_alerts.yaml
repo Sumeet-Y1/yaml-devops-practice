@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Connects an SNS topic to a Slack channel with AWS Chatbot, so CloudWatch
+  alarms show up in chat. Uses a read-only role for any commands run there.
+
+Parameters:
+  SlackWorkspaceId:
+    Type: String
+    Description: Slack workspace ID (authorize the workspace once in the Chatbot console first)
+
+  SlackChannelId:
+    Type: String
+    Description: Slack channel ID, for example C01234ABCDE
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-chat-alerts'
+
+  AlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref AlertTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchPublish
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref AlertTopic
+
+  ChatbotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: chatbot.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+
+  SlackChannel:
+    Type: AWS::Chatbot::SlackChannelConfiguration
+    Properties:
+      ConfigurationName: !Sub '${AWS::StackName}-slack'
+      IamRoleArn: !GetAtt ChatbotRole.Arn
+      SlackWorkspaceId: !Ref SlackWorkspaceId
+      SlackChannelId: !Ref SlackChannelId
+      SnsTopicArns:
+        - !Ref AlertTopic
+      LoggingLevel: ERROR
+
+Outputs:
+  AlertTopicArn:
+    Description: Use this topic as an alarm action
+    Value: !Ref AlertTopic
+
+  SlackConfigurationArn:
+    Description: ARN of the Chatbot Slack configuration
+    Value: !Ref SlackChannel
