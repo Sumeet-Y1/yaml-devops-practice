@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon S3 Tables table bucket, a namespace, and an Apache
+  Iceberg table for analytics queries with Athena or Spark.
+
+Parameters:
+  TableBucketName:
+    Type: String
+    Default: practice-table-bucket
+    AllowedPattern: '[a-z0-9][a-z0-9-]{1,61}[a-z0-9]'
+    Description: Table bucket name (lowercase letters, numbers, hyphens)
+
+  NamespaceName:
+    Type: String
+    Default: analytics
+    AllowedPattern: '[a-z0-9_]+'
+    Description: Namespace (like a database schema) that groups tables
+
+Resources:
+  TableBucket:
+    Type: AWS::S3Tables::TableBucket
+    Properties:
+      TableBucketName: !Ref TableBucketName
+
+  AnalyticsNamespace:
+    Type: AWS::S3Tables::Namespace
+    Properties:
+      TableBucketARN: !GetAtt TableBucket.TableBucketARN
+      Namespace: !Ref NamespaceName
+
+  EventsTable:
+    Type: AWS::S3Tables::Table
+    DependsOn: AnalyticsNamespace
+    Properties:
+      TableBucketARN: !GetAtt TableBucket.TableBucketARN
+      Namespace: !Ref NamespaceName
+      TableName: events
+      OpenTableFormat: ICEBERG
+
+Outputs:
+  TableBucketArn:
+    Description: ARN of the table bucket
+    Value: !GetAtt TableBucket.TableBucketARN
+
+  TableArn:
+    Description: ARN of the Iceberg table
+    Value: !GetAtt EventsTable.TableARN
