@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EC2 On-Demand Capacity Reservation that guarantees compute
+  capacity in one Availability Zone, whether or not instances are running.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Instance type to reserve
+
+  InstanceCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Number of instances to reserve
+
+Resources:
+  CapacityReservation:
+    Type: AWS::EC2::CapacityReservation
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      InstanceType: !Ref InstanceType
+      InstancePlatform: Linux/UNIX
+      InstanceCount: !Ref InstanceCount
+      InstanceMatchCriteria: open
+      EndDateType: unlimited
+      Tenancy: default
+      EbsOptimized: false
+
+Outputs:
+  CapacityReservationId:
+    Description: ID of the reservation
+    Value: !Ref CapacityReservation
+
+  AvailableInstanceCount:
+    Description: Reserved slots not yet used by running instances
+    Value: !GetAtt CapacityReservation.AvailableInstanceCount
