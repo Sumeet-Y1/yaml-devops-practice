@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables Amazon DevOps Guru for chosen CloudFormation stacks and sends
+  operational insights to an SNS topic.
+
+Parameters:
+  StackNames:
+    Type: CommaDelimitedList
+    Description: Names of the stacks DevOps Guru should analyze, comma separated
+
+Resources:
+  InsightsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-devops-guru-insights'
+
+  InsightsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref InsightsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowDevOpsGuruPublish
+            Effect: Allow
+            Principal:
+              Service: devops-guru.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref InsightsTopic
+
+  GuruCoverage:
+    Type: AWS::DevOpsGuru::ResourceCollection
+    Properties:
+      ResourceCollectionFilter:
+        CloudFormation:
+          StackNames: !Ref StackNames
+
+  GuruNotifications:
+    Type: AWS::DevOpsGuru::NotificationChannel
+    DependsOn: InsightsTopicPolicy
+    Properties:
+      Config:
+        Sns:
+          TopicArn: !Ref InsightsTopic
+
+Outputs:
+  InsightsTopicArn:
+    Description: Subscribe to this topic to receive DevOps Guru insights
+    Value: !Ref InsightsTopic
