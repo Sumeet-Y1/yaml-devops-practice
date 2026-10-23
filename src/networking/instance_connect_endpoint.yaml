@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EC2 Instance Connect Endpoint so you can SSH into private
+  instances with no public IP, bastion host, or internet gateway.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that contains the private instances
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the endpoint
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block the endpoint is allowed to reach on port 22
+
+Resources:
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow the endpoint to open SSH connections inside the VPC
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref VpcCidr
+
+  ConnectEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Properties:
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PreserveClientIp: false
+
+Outputs:
+  EndpointId:
+    Description: Use with aws ec2-instance-connect ssh --connection-type eice
+    Value: !Ref ConnectEndpoint
