@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Glue Schema Registry with an Avro schema that enforces
+  backward compatibility, for streaming data from Kafka or Kinesis.
+
+Resources:
+  SchemaRegistry:
+    Type: AWS::Glue::Registry
+    Properties:
+      Name: !Sub '${AWS::StackName}-registry'
+      Description: Registry for streaming event schemas
+
+  OrderSchema:
+    Type: AWS::Glue::Schema
+    Properties:
+      Name: order-created
+      Description: Schema for order created events
+      DataFormat: AVRO
+      Compatibility: BACKWARD
+      Registry:
+        Arn: !GetAtt SchemaRegistry.Arn
+      SchemaDefinition: |
+        {
+          "type": "record",
+          "name": "OrderCreated",
+          "namespace": "com.example.orders",
+          "fields": [
+            { "name": "orderId", "type": "string" },
+            { "name": "customerId", "type": "string" },
+            { "name": "total", "type": "double" }
+          ]
+        }
+
+Outputs:
+  RegistryArn:
+    Description: ARN of the schema registry
+    Value: !GetAtt SchemaRegistry.Arn
+
+  SchemaArn:
+    Description: ARN of the schema
+    Value: !Ref OrderSchema
