@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Installs the EKS Pod Identity Agent add-on and links a Kubernetes service
+  account to an IAM role, so pods get AWS permissions without IRSA setup.
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the existing EKS cluster
+
+  Namespace:
+    Type: String
+    Default: default
+    Description: Kubernetes namespace of the service account
+
+  ServiceAccountName:
+    Type: String
+    Default: app-sa
+    Description: Kubernetes service account that receives the role
+
+Resources:
+  PodIdentityAgent:
+    Type: AWS::EKS::Addon
+    Properties:
+      ClusterName: !Ref ClusterName
+      AddonName: eks-pod-identity-agent
+      ResolveConflicts: OVERWRITE
+
+  AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pods.eks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  PodIdentity:
+    Type: AWS::EKS::PodIdentityAssociation
+    DependsOn: PodIdentityAgent
+    Properties:
+      ClusterName: !Ref ClusterName
+      Namespace: !Ref Namespace
+      ServiceAccount: !Ref ServiceAccountName
+      RoleArn: !GetAtt AppRole.Arn
+
+Outputs:
+  RoleArn:
+    Description: Role that pods using the service account assume
+    Value: !GetAtt AppRole.Arn
+
+  AssociationArn:
+    Description: ARN of the pod identity association
+    Value: !GetAtt PodIdentity.AssociationArn
