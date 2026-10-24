@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Mounts an Amazon EFS file system into a Lambda function through an access
+  point, so the function can keep files between invocations.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the mount target and the function
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group that allows NFS (TCP 2049) within itself
+
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+
+  MountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref SubnetId
+      SecurityGroups:
+        - !Ref SecurityGroupId
+
+  AccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref FileSystem
+      PosixUser:
+        Uid: '1001'
+        Gid: '1001'
+      RootDirectory:
+        Path: /lambda
+        CreationInfo:
+          OwnerUid: '1001'
+          OwnerGid: '1001'
+          Permissions: '750'
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: MountEfs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                Resource: !GetAtt FileSystem.Arn
+
+  CounterFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: MountTarget
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt FunctionRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetId
+        SecurityGroupIds:
+          - !Ref SecurityGroupId
+      FileSystemConfigs:
+        - Arn: !GetAtt AccessPoint.Arn
+          LocalMountPath: /mnt/data
+      Code:
+        ZipFile: |
+          import os
+
+          PATH = "/mnt/data/counter.txt"
+
+          def handler(event, context):
+              count = 0
+              if os.path.exists(PATH):
+                  with open(PATH) as f:
+                      count = int(f.read() or 0)
+              count += 1
+              with open(PATH, "w") as f:
+                  f.write(str(count))
+              return {"invocations": count}
+
+Outputs:
+  FileSystemId:
+    Description: ID of the EFS file system
+    Value: !Ref FileSystem
+
+  FunctionName:
+    Description: Invoke it repeatedly and watch the counter grow
+    Value: !Ref CounterFunction
