@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EKS Fargate profile so pods in a chosen namespace run on
+  serverless Fargate instead of EC2 worker nodes.
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the existing EKS cluster
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for the pods (Fargate does not support public subnets)
+
+  Namespace:
+    Type: String
+    Default: fargate-apps
+    Description: Kubernetes namespace whose pods run on Fargate
+
+Resources:
+  PodExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks-fargate-pods.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy
+
+  FargateProfile:
+    Type: AWS::EKS::FargateProfile
+    Properties:
+      ClusterName: !Ref ClusterName
+      FargateProfileName: !Sub '${AWS::StackName}-profile'
+      PodExecutionRoleArn: !GetAtt PodExecutionRole.Arn
+      Subnets: !Ref PrivateSubnetIds
+      Selectors:
+        - Namespace: !Ref Namespace
+          Labels:
+            - Key: compute
+              Value: fargate
+
+Outputs:
+  FargateProfileArn:
+    Description: ARN of the Fargate profile
+    Value: !GetAtt FargateProfile.Arn
+
+  PodExecutionRoleArn:
+    Description: Role used by pods on Fargate
+    Value: !GetAtt PodExecutionRole.Arn
