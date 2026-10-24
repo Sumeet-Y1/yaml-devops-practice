@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Metric Stream that sends EC2 and Lambda metrics in
+  near real time through Kinesis Data Firehose to S3.
+
+Resources:
+  MetricsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteMetricsToS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt MetricsBucket.Arn
+                  - !Sub '${MetricsBucket.Arn}/*'
+
+  MetricsDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub '${AWS::StackName}-metrics'
+      DeliveryStreamType: DirectPut
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt MetricsBucket.Arn
+        RoleARN: !GetAtt FirehoseRole.Arn
+        Prefix: metrics/
+        ErrorOutputPrefix: errors/
+        CompressionFormat: GZIP
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 5
+
+  MetricStreamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: streams.metrics.cloudwatch.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PutToFirehose
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - firehose:PutRecord
+                  - firehose:PutRecordBatch
+                Resource: !GetAtt MetricsDeliveryStream.Arn
+
+  MetricStream:
+    Type: AWS::CloudWatch::MetricStream
+    Properties:
+      Name: !Sub '${AWS::StackName}-stream'
+      FirehoseArn: !GetAtt MetricsDeliveryStream.Arn
+      RoleArn: !GetAtt MetricStreamRole.Arn
+      OutputFormat: json
+      IncludeFilters:
+        - Namespace: AWS/EC2
+        - Namespace: AWS/Lambda
+
+Outputs:
+  MetricStreamArn:
+    Description: ARN of the metric stream
+    Value: !GetAtt MetricStream.Arn
+
+  MetricsBucketName:
+    Description: Streamed metrics land here as gzipped JSON
+    Value: !Ref MetricsBucket
