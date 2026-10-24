@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Managed Service for Apache Flink application that runs
+  a Flink job packaged in S3, with an execution role and CloudWatch logging.
+
+Parameters:
+  CodeBucketArn:
+    Type: String
+    Description: ARN of the S3 bucket that holds the Flink application package
+
+  CodeFileKey:
+    Type: String
+    Default: flink-app.jar
+    Description: S3 key of the application JAR or ZIP file
+
+Resources:
+  FlinkLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/flink/${AWS::StackName}'
+      RetentionInDays: 7
+
+  FlinkLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FlinkLogGroup
+      LogStreamName: application
+
+  FlinkRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: kinesisanalytics.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FlinkRuntimeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${CodeBucketArn}/${CodeFileKey}'
+              - Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: !GetAtt FlinkLogGroup.Arn
+
+  FlinkApplication:
+    Type: AWS::KinesisAnalyticsV2::Application
+    Properties:
+      ApplicationName: !Sub '${AWS::StackName}-flink'
+      RuntimeEnvironment: FLINK-1_19
+      ServiceExecutionRole: !GetAtt FlinkRole.Arn
+      ApplicationConfiguration:
+        ApplicationCodeConfiguration:
+          CodeContentType: ZIPFILE
+          CodeContent:
+            S3ContentLocation:
+              BucketARN: !Ref CodeBucketArn
+              FileKey: !Ref CodeFileKey
+        FlinkApplicationConfiguration:
+          CheckpointConfiguration:
+            ConfigurationType: DEFAULT
+          MonitoringConfiguration:
+            ConfigurationType: CUSTOM
+            LogLevel: INFO
+            MetricsLevel: APPLICATION
+          ParallelismConfiguration:
+            ConfigurationType: CUSTOM
+            Parallelism: 1
+            ParallelismPerKPU: 1
+            AutoScalingEnabled: false
+
+  FlinkLogging:
+    Type: AWS::KinesisAnalyticsV2::ApplicationCloudWatchLoggingOption
+    Properties:
+      ApplicationName: !Ref FlinkApplication
+      CloudWatchLoggingOption:
+        LogStreamARN: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${FlinkLogGroup}:log-stream:${FlinkLogStream}'
+
+Outputs:
+  ApplicationName:
+    Description: Name of the Flink application
+    Value: !Ref FlinkApplication
+
+  LogGroupName:
+    Description: Application logs go here
+    Value: !Ref FlinkLogGroup
