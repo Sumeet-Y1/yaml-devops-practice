@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS CodeStar Connection to GitHub, which CodePipeline and
+  CodeBuild use to read source code, plus a policy that allows using it.
+
+Parameters:
+  ConnectionName:
+    Type: String
+    Default: practice-github
+    MaxLength: 32
+    Description: Connection name (32 characters maximum)
+
+Resources:
+  GitHubConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName: !Ref ConnectionName
+      ProviderType: GitHub
+
+  UseConnectionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows a pipeline or build role to use this GitHub connection
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: codestar-connections:UseConnection
+            Resource: !Ref GitHubConnection
+
+Outputs:
+  ConnectionArn:
+    Description: Use as the ConnectionArn in a CodePipeline source action
+    Value: !Ref GitHubConnection
+
+  ConnectionStatus:
+    Description: Shows PENDING until you authorize it in the console
+    Value: !GetAtt GitHubConnection.ConnectionStatus
+
+  UseConnectionPolicyArn:
+    Description: Attach this policy to the pipeline role
+    Value: !Ref UseConnectionPolicy
