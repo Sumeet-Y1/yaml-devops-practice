@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Kinesis Video Streams video stream with 24 hour
+  retention, and a WebRTC signaling channel for live peer-to-peer video.
+
+Resources:
+  CameraStream:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub '${AWS::StackName}-camera'
+      DataRetentionInHours: 24
+      MediaType: video/h264
+
+  LiveSignalingChannel:
+    Type: AWS::KinesisVideo::SignalingChannel
+    Properties:
+      Name: !Sub '${AWS::StackName}-live'
+      Type: SINGLE_MASTER
+      MessageTtlSeconds: 60
+
+Outputs:
+  StreamArn:
+    Description: ARN of the video stream
+    Value: !GetAtt CameraStream.Arn
+
+  SignalingChannelArn:
+    Description: ARN of the WebRTC signaling channel
+    Value: !GetAtt LiveSignalingChannel.Arn
