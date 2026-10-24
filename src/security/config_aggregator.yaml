@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Config aggregator that collects configuration and
+  compliance data from several accounts and all regions into one view.
+
+Parameters:
+  SourceAccountIds:
+    Type: CommaDelimitedList
+    Description: Comma separated 12-digit account IDs to aggregate
+
+Resources:
+  ConfigAggregator:
+    Type: AWS::Config::ConfigurationAggregator
+    Properties:
+      ConfigurationAggregatorName: !Sub '${AWS::StackName}-aggregator'
+      AccountAggregationSources:
+        - AccountIds: !Ref SourceAccountIds
+          AllAwsRegions: true
+
+Outputs:
+  AggregatorArn:
+    Description: ARN of the configuration aggregator
+    Value: !GetAtt ConfigAggregator.ConfigurationAggregatorArn
