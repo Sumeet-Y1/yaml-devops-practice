@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Observability Access Manager (OAM) sink in a
+  monitoring account, so a source account can share metrics, logs, and traces with it.
+
+Parameters:
+  SourceAccountId:
+    Type: String
+    Description: 12-digit ID of the source account allowed to link to this sink
+    AllowedPattern: '[0-9]{12}'
+
+Resources:
+  MonitoringSink:
+    Type: AWS::Oam::Sink
+    Properties:
+      Name: !Sub '${AWS::StackName}-sink'
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref SourceAccountId
+            Action:
+              - oam:CreateLink
+              - oam:UpdateLink
+            Resource: '*'
+            Condition:
+              ForAllValues:StringEquals:
+                oam:ResourceTypes:
+                  - AWS::CloudWatch::Metric
+                  - AWS::Logs::LogGroup
+                  - AWS::XRay::Trace
+
+Outputs:
+  SinkArn:
+    Description: Give this ARN to the source account when it creates its link
+    Value: !GetAtt MonitoringSink.Arn
