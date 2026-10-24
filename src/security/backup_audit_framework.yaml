@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Backup Audit Manager framework with two controls: resources
+  must be protected by a backup plan, and plans must run daily with 35 day retention.
+  Requires AWS Config recording to be turned on.
+
+Resources:
+  BackupFramework:
+    Type: AWS::Backup::Framework
+    Properties:
+      FrameworkName: practice_backup_framework
+      FrameworkDescription: Checks that EBS and RDS resources are backed up daily
+      FrameworkControls:
+        - ControlName: BACKUP_RESOURCES_PROTECTED_BY_BACKUP_PLAN
+          ControlScope:
+            ComplianceResourceTypes:
+              - EBS
+              - RDS
+        - ControlName: BACKUP_PLAN_MIN_FREQUENCY_AND_MIN_RETENTION_CHECK
+          ControlInputParameters:
+            - ParameterName: requiredFrequencyUnit
+              ParameterValue: hours
+            - ParameterName: requiredFrequencyValue
+              ParameterValue: '24'
+            - ParameterName: requiredRetentionDays
+              ParameterValue: '35'
+      FrameworkTags:
+        - Key: Purpose
+          Value: backup-compliance
+
+Outputs:
+  FrameworkArn:
+    Description: ARN of the backup framework
+    Value: !GetAtt BackupFramework.FrameworkArn
