@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates VPC Traffic Mirroring: a target, a filter that accepts inbound
+  HTTPS, and a session that copies packets from one network interface to another.
+
+Parameters:
+  SourceEniId:
+    Type: AWS::EC2::NetworkInterface::Id
+    Description: Network interface whose traffic is copied
+
+  TargetEniId:
+    Type: AWS::EC2::NetworkInterface::Id
+    Description: Network interface of the monitoring appliance that receives the copy
+
+Resources:
+  MirrorTarget:
+    Type: AWS::EC2::TrafficMirrorTarget
+    Properties:
+      Description: Monitoring appliance
+      NetworkInterfaceId: !Ref TargetEniId
+
+  MirrorFilter:
+    Type: AWS::EC2::TrafficMirrorFilter
+    Properties:
+      Description: Mirror inbound HTTPS only
+      NetworkServices:
+        - amazon-dns
+
+  InboundHttpsRule:
+    Type: AWS::EC2::TrafficMirrorFilterRule
+    Properties:
+      TrafficMirrorFilterId: !Ref MirrorFilter
+      TrafficDirection: ingress
+      RuleNumber: 100
+      RuleAction: accept
+      Protocol: 6
+      SourceCidrBlock: 0.0.0.0/0
+      DestinationCidrBlock: 0.0.0.0/0
+      DestinationPortRange:
+        FromPort: 443
+        ToPort: 443
+
+  MirrorSession:
+    Type: AWS::EC2::TrafficMirrorSession
+    Properties:
+      Description: Copy HTTPS traffic to the appliance
+      NetworkInterfaceId: !Ref SourceEniId
+      TrafficMirrorFilterId: !Ref MirrorFilter
+      TrafficMirrorTargetId: !Ref MirrorTarget
+      SessionNumber: 1
+
+Outputs:
+  SessionId:
+    Description: ID of the mirror session
+    Value: !Ref MirrorSession
+
+  FilterId:
+    Description: ID of the mirror filter
+    Value: !Ref MirrorFilter
