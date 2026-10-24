@@ -5,11 +5,11 @@ Description: >
 
 Parameters:
   SourceEniId:
-    Type: AWS::EC2::NetworkInterface::Id
+    Type: String
     Description: Network interface whose traffic is copied
 
   TargetEniId:
-    Type: AWS::EC2::NetworkInterface::Id
+    Type: String
     Description: Network interface of the monitoring appliance that receives the copy
 
 Resources:
