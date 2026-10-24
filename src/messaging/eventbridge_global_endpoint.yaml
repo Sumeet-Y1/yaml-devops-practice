@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EventBridge global endpoint with automatic failover to a
+  secondary region, driven by a Route 53 health check, with event replication.
+
+Parameters:
+  BusName:
+    Type: String
+    Default: orders-bus
+    Description: Name of the event bus (the same name must exist in the secondary region)
+
+  SecondaryRegion:
+    Type: String
+    Default: us-west-2
+    Description: Region that takes over when the primary is unhealthy
+
+  HealthCheckId:
+    Type: String
+    Description: ID of the Route 53 health check that reports primary region health
+
+Resources:
+  PrimaryBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref BusName
+
+  ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReplicateEvents
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource:
+                  - !GetAtt PrimaryBus.Arn
+                  - !Sub 'arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${BusName}'
+
+  GlobalEndpoint:
+    Type: AWS::Events::Endpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-endpoint'
+      Description: Fails over event ingestion to the secondary region
+      RoleArn: !GetAtt ReplicationRole.Arn
+      RoutingConfig:
+        FailoverConfig:
+          Primary:
+            HealthCheck: !Sub 'arn:aws:route53:::healthcheck/${HealthCheckId}'
+          Secondary:
+            Route: !Ref SecondaryRegion
+      ReplicationConfig:
+        State: ENABLED
+      EventBuses:
+        - EventBusArn: !GetAtt PrimaryBus.Arn
+        - EventBusArn: !Sub 'arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${BusName}'
+
+Outputs:
+  EndpointId:
+    Description: Pass this as EndpointId when calling PutEvents
+    Value: !GetAtt GlobalEndpoint.EndpointId
+
+  EndpointUrl:
+    Description: URL of the global endpoint
+    Value: !GetAtt GlobalEndpoint.EndpointUrl
