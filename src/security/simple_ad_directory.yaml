@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Directory Service Simple AD (Samba-based) directory in a
+  VPC, which Windows or Linux instances can join for central user management.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the directory
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Exactly two subnets in different Availability Zones
+
+  DirectoryName:
+    Type: String
+    Default: corp.practice.local
+    Description: Fully qualified domain name of the directory
+
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Password for the Administrator user (upper, lower, number, special character)
+
+Resources:
+  Directory:
+    Type: AWS::DirectoryService::SimpleAD
+    Properties:
+      Name: !Ref DirectoryName
+      Password: !Ref AdminPassword
+      Size: Small
+      Description: Practice Simple AD directory
+      VpcSettings:
+        VpcId: !Ref VpcId
+        SubnetIds: !Ref SubnetIds
+
+Outputs:
+  DirectoryId:
+    Description: ID of the directory
+    Value: !Ref Directory
+
+  DnsIpAddresses:
+    Description: Point instance DNS settings at these addresses
+    Value: !Join [',', !GetAtt Directory.DnsIpAddresses]
