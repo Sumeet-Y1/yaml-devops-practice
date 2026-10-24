@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom RDS MySQL parameter group that turns on the slow query
+  log, and an RDS event subscription that emails you about failures and maintenance.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives RDS events
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  MySqlParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: MySQL 8.0 with slow query logging
+      Family: mysql8.0
+      Parameters:
+        slow_query_log: '1'
+        long_query_time: '2'
+        log_output: FILE
+
+  EventTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-rds-events'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  EventTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref EventTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRdsPublish
+            Effect: Allow
+            Principal:
+              Service: events.rds.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref EventTopic
+
+  InstanceEventSubscription:
+    Type: AWS::RDS::EventSubscription
+    DependsOn: EventTopicPolicy
+    Properties:
+      SnsTopicArn: !Ref EventTopic
+      SourceType: db-instance
+      Enabled: true
+      EventCategories:
+        - failure
+        - maintenance
+        - failover
+
+Outputs:
+  ParameterGroupName:
+    Description: Attach this to an RDS MySQL instance
+    Value: !Ref MySqlParameterGroup
+
+  EventTopicArn:
+    Description: SNS topic that receives RDS events
+    Value: !Ref EventTopic
