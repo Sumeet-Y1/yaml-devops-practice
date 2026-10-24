@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sends S3 event notifications to two targets: new objects under uploads/
+  go to an SQS queue, and new .csv files under reports/ invoke a Lambda function.
+
+Parameters:
+  BucketPrefix:
+    Type: String
+    Default: practice-events
+    AllowedPattern: '[a-z0-9-]+'
+    Description: Lowercase prefix for the bucket name
+
+Resources:
+  UploadQueue:
+    Type: AWS::SQS::Queue
+
+  UploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref UploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt UploadQueue.Arn
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::${BucketPrefix}-${AWS::AccountId}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ReportFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              for record in event["Records"]:
+                  print("New report:", record["s3"]["object"]["key"])
+
+  S3InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReportFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::${BucketPrefix}-${AWS::AccountId}'
+
+  EventBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - UploadQueuePolicy
+      - S3InvokePermission
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: s3:ObjectCreated:*
+            Queue: !GetAtt UploadQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ReportFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: reports/
+                  - Name: suffix
+                    Value: .csv
+
+Outputs:
+  BucketName:
+    Description: Upload to uploads/ or reports/ to trigger notifications
+    Value: !Ref EventBucket
+
+  UploadQueueUrl:
+    Description: Queue that receives upload events
+    Value: !Ref UploadQueue
