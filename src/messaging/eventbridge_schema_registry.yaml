@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an EventBridge Schema Registry with a JSON Schema that describes
+  an OrderCreated event, so producers and consumers share one contract.
+
+Resources:
+  SchemaRegistry:
+    Type: AWS::EventSchemas::Registry
+    Properties:
+      RegistryName: !Sub '${AWS::StackName}-registry'
+      Description: Custom schemas for application events
+
+  OrderCreatedSchema:
+    Type: AWS::EventSchemas::Schema
+    Properties:
+      RegistryName: !GetAtt SchemaRegistry.RegistryName
+      SchemaName: OrderCreated
+      Type: JSONSchemaDraft4
+      Description: Event published when a customer places an order
+      Content: |
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "title": "OrderCreated",
+          "type": "object",
+          "properties": {
+            "orderId": { "type": "string" },
+            "customerId": { "type": "string" },
+            "total": { "type": "number" }
+          },
+          "required": ["orderId", "customerId", "total"]
+        }
+
+Outputs:
+  RegistryName:
+    Description: Name of the schema registry
+    Value: !GetAtt SchemaRegistry.RegistryName
+
+  SchemaArn:
+    Description: ARN of the OrderCreated schema
+    Value: !GetAtt OrderCreatedSchema.SchemaArn
