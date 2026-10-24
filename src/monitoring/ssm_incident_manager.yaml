@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sets up AWS Systems Manager Incident Manager: a replication set and a
+  response plan that opens an incident and posts updates to a chat SNS topic.
+
+Resources:
+  IncidentReplicationSet:
+    Type: AWS::SSMIncidents::ReplicationSet
+    Properties:
+      DeletionProtected: false
+      Regions:
+        - RegionName: !Ref AWS::Region
+
+  ChatTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-incident-chat'
+
+  HighImpactPlan:
+    Type: AWS::SSMIncidents::ResponsePlan
+    DependsOn: IncidentReplicationSet
+    Properties:
+      Name: !Sub '${AWS::StackName}-high-impact'
+      DisplayName: High impact outage
+      ChatChannel:
+        ChatbotSns:
+          - !Ref ChatTopic
+      IncidentTemplate:
+        Title: Production outage
+        Impact: 2
+        Summary: Customer-facing service is degraded or down
+        DedupeString: production-outage
+
+Outputs:
+  ResponsePlanArn:
+    Description: Use this as an alarm action target to start an incident
+    Value: !Ref HighImpactPlan
+
+  ChatTopicArn:
+    Description: Topic that receives incident updates
+    Value: !Ref ChatTopic
