@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configures Systems Manager Session Manager preferences: session logs go
+  to CloudWatch Logs and S3, and idle sessions time out after 15 minutes.
+
+Resources:
+  SessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ssm/sessions/${AWS::StackName}'
+      RetentionInDays: 30
+
+  SessionLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SessionPreferences:
+    Type: AWS::SSM::Document
+    Properties:
+      Name: SSM-SessionManagerRunShell
+      DocumentType: Session
+      DocumentFormat: JSON
+      Content:
+        schemaVersion: '1.0'
+        description: Session Manager preferences
+        sessionType: Standard_Stream
+        inputs:
+          s3BucketName: !Ref SessionLogBucket
+          s3KeyPrefix: sessions/
+          s3EncryptionEnabled: true
+          cloudWatchLogGroupName: !Ref SessionLogGroup
+          cloudWatchEncryptionEnabled: false
+          idleSessionTimeout: '15'
+          maxSessionDuration: ''
+          runAsEnabled: false
+          runAsDefaultUser: ''
+          kmsKeyId: ''
+          shellProfile:
+            linux: ''
+            windows: ''
+
+Outputs:
+  LogGroupName:
+    Description: Session activity is logged here
+    Value: !Ref SessionLogGroup
+
+  LogBucketName:
+    Description: Session transcripts are stored here
+    Value: !Ref SessionLogBucket
