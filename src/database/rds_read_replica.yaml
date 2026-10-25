@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a read replica of an existing RDS instance in the same region,
+  used to offload read traffic and as a base for disaster recovery.
+
+Parameters:
+  SourceDbInstanceId:
+    Type: String
+    Description: Identifier of the existing source RDS instance (it needs automated backups enabled)
+
+  ReplicaInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: Instance class for the replica
+
+Resources:
+  ReadReplica:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      SourceDBInstanceIdentifier: !Ref SourceDbInstanceId
+      DBInstanceClass: !Ref ReplicaInstanceClass
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Role
+          Value: read-replica
+
+Outputs:
+  ReplicaEndpoint:
+    Description: Point read-only queries at this endpoint
+    Value: !GetAtt ReadReplica.Endpoint.Address
+
+  ReplicaIdentifier:
+    Description: Identifier of the replica
+    Value: !Ref ReadReplica
