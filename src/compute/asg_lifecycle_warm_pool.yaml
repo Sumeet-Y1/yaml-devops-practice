@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Auto Scaling group with a launch lifecycle hook, a warm pool
+  of pre-initialized stopped instances, and CPU target tracking.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the group
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '1'
+      MaxSize: '3'
+      DesiredCapacity: '1'
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  LaunchHook:
+    Type: AWS::AutoScaling::LifecycleHook
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      LifecycleTransition: autoscaling:EC2_INSTANCE_LAUNCHING
+      HeartbeatTimeout: 300
+      DefaultResult: CONTINUE
+
+  WarmPool:
+    Type: AWS::AutoScaling::WarmPool
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PoolState: Stopped
+      MinSize: 1
+      InstanceReusePolicy:
+        ReuseOnScaleIn: true
+
+  CpuTargetTracking:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling group
+    Value: !Ref AutoScalingGroup
