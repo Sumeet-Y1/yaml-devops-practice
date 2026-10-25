@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Serves a private S3 bucket through CloudFront using Origin Access Control,
+  and requires signed URLs or cookies created with a trusted key group.
+
+Parameters:
+  PublicKeyPem:
+    Type: String
+    Description: PEM-encoded RSA public key (begins with -----BEGIN PUBLIC KEY-----)
+
+Resources:
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SigningPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref AWS::StackName
+        Name: !Sub '${AWS::StackName}-public-key'
+        EncodedKey: !Ref PublicKeyPem
+
+  SigningKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Sub '${AWS::StackName}-key-group'
+        Items:
+          - !Ref SigningPublicKey
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Private content that needs signed URLs
+        Origins:
+          - Id: private-s3
+            DomainName: !GetAtt PrivateBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: private-s3
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          TrustedKeyGroups:
+            - !Ref SigningKeyGroup
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PrivateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${PrivateBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+Outputs:
+  DistributionDomain:
+    Description: Requests without a valid signature get 403
+    Value: !GetAtt Distribution.DomainName
+
+  PublicKeyId:
+    Description: Use this as the Key-Pair-Id when signing URLs
+    Value: !Ref SigningPublicKey
+
+  BucketName:
+    Description: Upload private files here
+    Value: !Ref PrivateBucket
