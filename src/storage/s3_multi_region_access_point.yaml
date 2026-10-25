@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an S3 Multi-Region Access Point with one global endpoint that
+  routes requests to the closest of two buckets in different regions.
+
+Parameters:
+  BucketNameA:
+    Type: String
+    Description: Existing bucket in the first region
+
+  BucketNameB:
+    Type: String
+    Description: Existing bucket in a second region
+
+Resources:
+  GlobalAccessPoint:
+    Type: AWS::S3::MultiRegionAccessPoint
+    Properties:
+      Name: practice-mrap
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Regions:
+        - Bucket: !Ref BucketNameA
+        - Bucket: !Ref BucketNameB
+
+  GlobalAccessPointPolicy:
+    Type: AWS::S3::MultiRegionAccessPointPolicy
+    Properties:
+      MrapName: !Ref GlobalAccessPoint
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAccountAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub 'arn:aws:s3::${AWS::AccountId}:accesspoint/${GlobalAccessPoint.Alias}/object/*'
+
+Outputs:
+  AccessPointAlias:
+    Description: Use this alias in the access point ARN for reads and writes
+    Value: !GetAtt GlobalAccessPoint.Alias
