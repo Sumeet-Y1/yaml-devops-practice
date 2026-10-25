@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Practice template for core CloudFormation features: Parameters, Mappings,
+  Conditions, and the intrinsic functions Ref, GetAtt, Sub, Join, Split,
+  Select, FindInMap, Cidr, GetAZs, and If.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name, which drives sizing and the second subnet
+
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+    Description: CIDR block for the VPC
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      InstanceType: t3.micro
+      VolumeSize: 8
+    prod:
+      InstanceType: t3.small
+      VolumeSize: 20
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', !Ref Environment, vpc]]
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [0, !Cidr [!GetAtt Vpc.CidrBlock, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: IsProd
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Cidr [!GetAtt Vpc.CidrBlock, 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-${Environment}-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: !FindInMap [EnvironmentConfig, !Ref Environment, VolumeSize]
+              VolumeType: gp3
+              Encrypted: true
+
+Outputs:
+  SubnetIds:
+    Description: One subnet in dev, two subnets in prod (Fn::If with Fn::Join)
+    Value: !If [IsProd, !Join [',', [!Ref SubnetA, !Ref SubnetB]], !Ref SubnetA]
+
+  ChosenInstanceType:
+    Description: Looked up from the mapping with Fn::FindInMap
+    Value: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
+
+  VpcNetworkAddress:
+    Description: First part of the CIDR block, split on the slash (Fn::Split and Fn::Select)
+    Value: !Select [0, !Split ['/', !Ref VpcCidr]]
+
+  Summary:
+    Description: Fn::Sub with a variable map
+    Value: !Sub
+      - 'Environment ${Env} in ${Region} uses ${Type}'
+      - Env: !Ref Environment
+        Region: !Ref AWS::Region
+        Type: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
