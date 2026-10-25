@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Elemental MediaConvert on-demand queue, an S3 bucket and
+  access role for video files, and an EventBridge rule that emails you when
+  a job on the queue completes or fails.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives job status notifications
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  VideoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  MediaConvertRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: mediaconvert.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VideoBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${VideoBucket.Arn}/*'
+
+  TranscodeQueue:
+    Type: AWS::MediaConvert::Queue
+    Properties:
+      Name: !Sub '${AWS::StackName}-queue'
+      Description: On-demand queue for practice transcoding jobs
+      PricingPlan: ON_DEMAND
+      Status: ACTIVE
+
+  JobTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-job-status'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  JobTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref JobTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref JobTopic
+
+  JobStatusRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-job-status'
+      Description: Notify when a MediaConvert job completes or fails
+      EventPattern:
+        source:
+          - aws.mediaconvert
+        detail-type:
+          - MediaConvert Job State Change
+        detail:
+          status:
+            - COMPLETE
+            - ERROR
+          queue:
+            - !GetAtt TranscodeQueue.Arn
+      Targets:
+        - Id: EmailTarget
+          Arn: !Ref JobTopic
+
+Outputs:
+  QueueArn:
+    Description: Submit jobs to this queue
+    Value: !GetAtt TranscodeQueue.Arn
+
+  RoleArn:
+    Description: Role to pass to MediaConvert jobs
+    Value: !GetAtt MediaConvertRole.Arn
+
+  VideoBucketName:
+    Description: Source and output videos
+    Value: !Ref VideoBucket
