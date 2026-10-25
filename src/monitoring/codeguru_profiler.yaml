@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon CodeGuru Profiler profiling group and a role that
+  application hosts can use to send profiling data to it.
+
+Resources:
+  AgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ProfilerAgentAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codeguru-profiler:ConfigureAgent
+                  - codeguru-profiler:PostAgentProfile
+                Resource: !Sub 'arn:aws:codeguru-profiler:${AWS::Region}:${AWS::AccountId}:profilingGroup/${AWS::StackName}-profiling'
+
+  ProfilingGroup:
+    Type: AWS::CodeGuruProfiler::ProfilingGroup
+    Properties:
+      ProfilingGroupName: !Sub '${AWS::StackName}-profiling'
+      ComputePlatform: Default
+      AgentPermissions:
+        Principals:
+          - !GetAtt AgentRole.Arn
+
+Outputs:
+  ProfilingGroupArn:
+    Description: ARN of the profiling group
+    Value: !GetAtt ProfilingGroup.Arn
+
+  AgentRoleArn:
+    Description: Role the profiler agent runs as
+    Value: !GetAtt AgentRole.Arn
