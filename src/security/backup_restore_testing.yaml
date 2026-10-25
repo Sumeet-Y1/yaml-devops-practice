@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Backup restore testing plan that restores the latest
+  DynamoDB recovery point every week to prove your backups actually work.
+
+Parameters:
+  PlanName:
+    Type: String
+    Default: practice_restore_plan
+    AllowedPattern: '[a-zA-Z0-9_]{1,50}'
+    Description: Plan name (letters, numbers, underscores only)
+
+  TableArn:
+    Type: String
+    Description: ARN of the DynamoDB table whose backups should be tested
+
+Resources:
+  RestoreRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+
+  RestoreTestingPlan:
+    Type: AWS::Backup::RestoreTestingPlan
+    Properties:
+      RestoreTestingPlanName: !Ref PlanName
+      ScheduleExpression: cron(0 5 ? * SUN *)
+      StartWindowHours: 8
+      RecoveryPointSelection:
+        Algorithm: LATEST_WITHIN_WINDOW
+        IncludeVaults:
+          - '*'
+        RecoveryPointTypes:
+          - SNAPSHOT
+        SelectionWindowDays: 7
+
+  RestoreTestingSelection:
+    Type: AWS::Backup::RestoreTestingSelection
+    DependsOn: RestoreTestingPlan
+    Properties:
+      RestoreTestingPlanName: !Ref PlanName
+      RestoreTestingSelectionName: dynamodb_selection
+      IamRoleArn: !GetAtt RestoreRole.Arn
+      ProtectedResourceType: DynamoDB
+      ProtectedResourceArns:
+        - !Ref TableArn
+      ValidationWindowHours: 1
+
+Outputs:
+  PlanArn:
+    Description: ARN of the restore testing plan
+    Value: !GetAtt RestoreTestingPlan.RestoreTestingPlanArn
