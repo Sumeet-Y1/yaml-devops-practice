@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an SSM Automation runbook that stops an EC2 instance, with a
+  dedicated service role the automation assumes while it runs.
+
+Resources:
+  AutomationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StopInstances
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                Resource: '*'
+
+  StopInstanceRunbook:
+    Type: AWS::SSM::Document
+    Properties:
+      Name: !Sub '${AWS::StackName}-stop-instance'
+      DocumentType: Automation
+      DocumentFormat: YAML
+      Content:
+        schemaVersion: '0.3'
+        description: Stop an EC2 instance and wait until it is stopped
+        assumeRole: '{{ AutomationAssumeRole }}'
+        parameters:
+          InstanceId:
+            type: String
+            description: Instance to stop
+          AutomationAssumeRole:
+            type: String
+            description: Role the automation runs as
+            default: !GetAtt AutomationRole.Arn
+        mainSteps:
+          - name: stopInstance
+            action: aws:changeInstanceState
+            inputs:
+              InstanceIds:
+                - '{{ InstanceId }}'
+              DesiredState: stopped
+
+Outputs:
+  RunbookName:
+    Description: Start it with aws ssm start-automation-execution
+    Value: !Ref StopInstanceRunbook
+
+  AutomationRoleArn:
+    Description: Role used by the runbook
+    Value: !GetAtt AutomationRole.Arn
