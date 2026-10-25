@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Lex V2 chatbot with an English locale, a Greeting
+  intent with sample utterances and a reply, and the required fallback intent.
+
+Resources:
+  LexRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lexv2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LexRuntime
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: polly:SynthesizeSpeech
+                Resource: '*'
+
+  PracticeBot:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: !Sub '${AWS::StackName}-bot'
+      Description: Simple greeting bot
+      RoleArn: !GetAtt LexRole.Arn
+      IdleSessionTTLInSeconds: 300
+      AutoBuildBotLocales: true
+      DataPrivacy:
+        ChildDirected: false
+      BotLocales:
+        - LocaleId: en_US
+          NluConfidenceThreshold: 0.4
+          Intents:
+            - Name: Greeting
+              Description: Responds to hello messages
+              SampleUtterances:
+                - Utterance: hello
+                - Utterance: hi there
+                - Utterance: good morning
+              IntentClosingSetting:
+                ClosingResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: Hello! How can I help you today?
+            - Name: FallbackIntent
+              Description: Used when no other intent matches
+              ParentIntentSignature: AMAZON.FallbackIntent
+
+Outputs:
+  BotId:
+    Description: ID of the Lex bot
+    Value: !GetAtt PracticeBot.Id
+
+  BotArn:
+    Description: ARN of the Lex bot
+    Value: !GetAtt PracticeBot.Arn
