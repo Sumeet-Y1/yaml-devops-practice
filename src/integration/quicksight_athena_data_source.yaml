@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon QuickSight data source that reads from Athena, and
+  grants one QuickSight user permission to use and manage it.
+  Requires an active QuickSight subscription in the account.
+
+Parameters:
+  QuickSightPrincipalArn:
+    Type: String
+    Description: ARN of the QuickSight user, for example arn:aws:quicksight:us-east-1:123456789012:user/default/myuser
+
+  AthenaWorkGroup:
+    Type: String
+    Default: primary
+    Description: Athena workgroup QuickSight queries through
+
+Resources:
+  AthenaDataSource:
+    Type: AWS::QuickSight::DataSource
+    Properties:
+      AwsAccountId: !Ref AWS::AccountId
+      DataSourceId: !Sub '${AWS::StackName}-athena'
+      Name: Athena practice data source
+      Type: ATHENA
+      DataSourceParameters:
+        AthenaParameters:
+          WorkGroup: !Ref AthenaWorkGroup
+      Permissions:
+        - Principal: !Ref QuickSightPrincipalArn
+          Actions:
+            - quicksight:DescribeDataSource
+            - quicksight:DescribeDataSourcePermissions
+            - quicksight:PassDataSource
+            - quicksight:UpdateDataSource
+            - quicksight:DeleteDataSource
+            - quicksight:UpdateDataSourcePermissions
+
+Outputs:
+  DataSourceArn:
+    Description: ARN of the data source
+    Value: !GetAtt AthenaDataSource.Arn
