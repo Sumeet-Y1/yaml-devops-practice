@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shows nested stacks: this parent template creates a child stack from a
+  template stored in S3, passes it a parameter, and reads one of its outputs.
+
+# Example child template to upload to S3 (save it as child-bucket.yaml):
+#
+#   AWSTemplateFormatVersion: '2010-09-09'
+#   Parameters:
+#     BucketPrefix:
+#       Type: String
+#   Resources:
+#     ChildBucket:
+#       Type: AWS::S3::Bucket
+#       Properties:
+#         BucketName: !Sub '${BucketPrefix}-${AWS::AccountId}'
+#   Outputs:
+#     BucketName:
+#       Value: !Ref ChildBucket
+
+Parameters:
+  ChildTemplateUrl:
+    Type: String
+    Description: S3 URL of the child template, for example https://my-bucket.s3.amazonaws.com/child-bucket.yaml
+
+  BucketPrefix:
+    Type: String
+    Default: practice-nested
+    AllowedPattern: '[a-z0-9-]+'
+    Description: Prefix passed to the child stack
+
+Resources:
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref ChildTemplateUrl
+      TimeoutInMinutes: 10
+      Parameters:
+        BucketPrefix: !Ref BucketPrefix
+      Tags:
+        - Key: ParentStack
+          Value: !Ref AWS::StackName
+
+Outputs:
+  ChildStackId:
+    Description: ID of the nested stack
+    Value: !Ref StorageStack
+
+  ChildBucketName:
+    Description: Output value read from the child stack
+    Value: !GetAtt StorageStack.Outputs.BucketName
