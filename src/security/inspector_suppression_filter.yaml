@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Amazon Inspector suppression rule that hides informational
+  findings for one ECR repository, so the findings list stays focused.
+  Inspector itself must already be enabled in the account.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: practice/app
+    Description: ECR repository whose informational findings are suppressed
+
+Resources:
+  SuppressInformationalFilter:
+    Type: AWS::InspectorV2::Filter
+    Properties:
+      Name: suppress-informational-ecr
+      Description: Hide informational findings for one ECR repository
+      FilterAction: SUPPRESS
+      FilterCriteria:
+        Severity:
+          - Comparison: EQUALS
+            Value: INFORMATIONAL
+        ResourceType:
+          - Comparison: EQUALS
+            Value: AWS_ECR_CONTAINER_IMAGE
+        EcrImageRepositoryName:
+          - Comparison: EQUALS
+            Value: !Ref RepositoryName
+
+Outputs:
+  FilterArn:
+    Description: ARN of the suppression rule
+    Value: !GetAtt SuppressInformationalFilter.Arn
