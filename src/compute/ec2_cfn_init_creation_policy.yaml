@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Launches an EC2 instance configured by cfn-init (configSets, files, and
+  commands) and uses a CreationPolicy so the stack waits for cfn-signal.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet for the instance
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  WebServer:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+            - install
+            - configure
+        install:
+          commands:
+            01_install_nginx:
+              command: dnf install -y nginx
+        configure:
+          files:
+            /usr/share/nginx/html/index.html:
+              content: !Sub |
+                <h1>Configured by cfn-init in stack ${AWS::StackName}</h1>
+              mode: '000644'
+              owner: root
+              group: root
+          commands:
+            01_start_nginx:
+              command: systemctl enable --now nginx
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SubnetId: !Ref SubnetId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          dnf install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --configsets default --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-web'
+
+Outputs:
+  InstanceId:
+    Description: ID of the instance
+    Value: !Ref WebServer
+
+  PublicIp:
+    Description: Browse to this address to see the page cfn-init created
+    Value: !GetAtt WebServer.PublicIp
