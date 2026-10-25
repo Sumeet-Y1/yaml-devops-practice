@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an on-demand Kinesis data stream with an enhanced fan-out
+  consumer, and a Lambda function that reads through that dedicated consumer.
+
+Resources:
+  EventStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub '${AWS::StackName}-stream'
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+
+  FanOutConsumer:
+    Type: AWS::Kinesis::StreamConsumer
+    Properties:
+      ConsumerName: !Sub '${AWS::StackName}-consumer'
+      StreamARN: !GetAtt EventStream.Arn
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          import base64
+
+          def handler(event, context):
+              for record in event["Records"]:
+                  payload = base64.b64decode(record["kinesis"]["data"]).decode("utf-8")
+                  print("Record:", payload)
+
+  ConsumerMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !Ref FanOutConsumer
+      FunctionName: !Ref ProcessorFunction
+      StartingPosition: LATEST
+      BatchSize: 100
+      MaximumRetryAttempts: 2
+
+Outputs:
+  StreamName:
+    Description: Put records here
+    Value: !Ref EventStream
+
+  ConsumerArn:
+    Description: Dedicated read throughput consumer
+    Value: !Ref FanOutConsumer
