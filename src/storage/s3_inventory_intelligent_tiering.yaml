@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configures a source bucket with S3 Intelligent-Tiering archive tiers and
+  a weekly S3 Inventory report delivered to a separate report bucket.
+
+Parameters:
+  BucketPrefix:
+    Type: String
+    Default: practice-inventory
+    AllowedPattern: '[a-z0-9-]+'
+    Description: Lowercase prefix for both bucket names
+
+Resources:
+  ReportBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-reports-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ReportBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReportBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowInventoryDelivery
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ReportBucket.Arn}/*'
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::${BucketPrefix}-source-${AWS::AccountId}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                s3:x-amz-acl: bucket-owner-full-control
+
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: ReportBucketPolicy
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-source-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      IntelligentTieringConfigurations:
+        - Id: archive-cold-data
+          Status: Enabled
+          Tierings:
+            - AccessTier: ARCHIVE_ACCESS
+              Days: 90
+            - AccessTier: DEEP_ARCHIVE_ACCESS
+              Days: 180
+      InventoryConfigurations:
+        - Id: weekly-inventory
+          Enabled: true
+          IncludedObjectVersions: Current
+          ScheduleFrequency: Weekly
+          OptionalFields:
+            - Size
+            - LastModifiedDate
+            - StorageClass
+            - IntelligentTieringAccessTier
+          Destination:
+            BucketArn: !GetAtt ReportBucket.Arn
+            BucketAccountId: !Ref AWS::AccountId
+            Format: CSV
+            Prefix: inventory
+
+Outputs:
+  SourceBucketName:
+    Description: Bucket being inventoried
+    Value: !Ref SourceBucket
+
+  ReportBucketName:
+    Description: Inventory reports are delivered here
+    Value: !Ref ReportBucket
