@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an API Gateway REST API that validates incoming requests with a
+  JSON Schema model, a request validator, and a required query string,
+  rejecting bad requests before any backend runs.
+
+Resources:
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-validated-api'
+
+  OrderModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref RestApi
+      Name: OrderModel
+      ContentType: application/json
+      Schema:
+        '$schema': 'http://json-schema.org/draft-04/schema#'
+        title: Order
+        type: object
+        required:
+          - orderId
+          - quantity
+        properties:
+          orderId:
+            type: string
+          quantity:
+            type: integer
+            minimum: 1
+
+  RequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      RestApiId: !Ref RestApi
+      Name: validate-body-and-params
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  OrdersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: orders
+
+  CreateOrderMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref OrdersResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      RequestValidatorId: !Ref RequestValidator
+      RequestModels:
+        application/json: !Ref OrderModel
+      RequestParameters:
+        method.request.querystring.source: true
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 201}'
+        IntegrationResponses:
+          - StatusCode: '201'
+            ResponseTemplates:
+              application/json: '{"message": "order accepted"}'
+      MethodResponses:
+        - StatusCode: '201'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: CreateOrderMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+Outputs:
+  OrdersUrl:
+    Description: POST valid JSON with ?source=web gets 201, anything else gets 400
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/orders'
