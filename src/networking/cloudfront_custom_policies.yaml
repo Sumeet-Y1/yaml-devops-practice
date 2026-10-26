@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom CloudFront cache policy, origin request policy, and
+  response headers policy (security headers and CORS), and attaches all
+  three to a distribution.
+
+Parameters:
+  OriginDomain:
+    Type: String
+    Default: example.com
+    Description: Domain name of the HTTPS origin
+
+Resources:
+  CustomCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-cache-policy'
+        Comment: Cache by country header and two query strings
+        DefaultTTL: 3600
+        MaxTTL: 86400
+        MinTTL: 60
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - CloudFront-Viewer-Country
+          CookiesConfig:
+            CookieBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - page
+              - sort
+
+  CustomOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub '${AWS::StackName}-origin-request-policy'
+        Comment: Forward all query strings to the origin, no cookies
+        HeadersConfig:
+          HeaderBehavior: none
+        CookiesConfig:
+          CookieBehavior: none
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  CustomResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-response-headers'
+        Comment: Security headers plus a simple CORS configuration
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+        CorsConfig:
+          AccessControlAllowCredentials: false
+          AccessControlAllowHeaders:
+            Items:
+              - '*'
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowOrigins:
+            Items:
+              - https://example.com
+          OriginOverride: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Distribution using all three custom policies
+        Origins:
+          - Id: main-origin
+            DomainName: !Ref OriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: main-origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: !Ref CustomCachePolicy
+          OriginRequestPolicyId: !Ref CustomOriginRequestPolicy
+          ResponseHeadersPolicyId: !Ref CustomResponseHeadersPolicy
+
+Outputs:
+  DistributionDomain:
+    Description: CloudFront domain name
+    Value: !GetAtt Distribution.DomainName
+
+  CachePolicyId:
+    Description: ID of the custom cache policy
+    Value: !Ref CustomCachePolicy
