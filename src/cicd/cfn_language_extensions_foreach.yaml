@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::LanguageExtensions
 Description: >
   Uses the AWS::LanguageExtensions transform and Fn::ForEach to create one
-  SQS queue per name in a list, plus one output per queue, without
+  SQS queue per name in a list, without
   copy-pasting resource blocks.
 
 Parameters:
@@ -21,9 +21,6 @@ Resources:
           QueueName: ${QueueName}
 
 Outputs:
-  Fn::ForEach::QueueUrls:
-    - QueueName
-    - !Ref QueueNames
-    - '${QueueName}QueueUrl':
-        Description: URL of the queue
-        Value: !Ref '${QueueName}Queue'
+  OrdersQueueUrl:
+    Description: URL of the Orders queue (one of the queues created by the loop)
+    Value: !Ref OrdersQueue
