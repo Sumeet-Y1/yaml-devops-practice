@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Cost Category that groups spend into Production and
+  Development based on the Environment tag, with a default for the rest.
+
+Resources:
+  EnvironmentCostCategory:
+    Type: AWS::CE::CostCategory
+    Properties:
+      Name: !Sub '${AWS::StackName}-environments'
+      RuleVersion: CostCategoryExpression.v1
+      DefaultValue: Untagged
+      Rules: |
+        [
+          {
+            "Value": "Production",
+            "Rule": {
+              "Tags": {
+                "Key": "Environment",
+                "Values": ["prod"],
+                "MatchOptions": ["EQUALS"]
+              }
+            }
+          },
+          {
+            "Value": "Development",
+            "Rule": {
+              "Tags": {
+                "Key": "Environment",
+                "Values": ["dev"],
+                "MatchOptions": ["EQUALS"]
+              }
+            }
+          }
+        ]
+
+Outputs:
+  CostCategoryArn:
+    Description: ARN of the cost category
+    Value: !GetAtt EnvironmentCostCategory.Arn
