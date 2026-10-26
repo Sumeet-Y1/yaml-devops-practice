@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shifts Lambda traffic gradually with CodeDeploy: 10 percent of requests
+  go to the new version for 5 minutes, then the rest, with automatic
+  rollback if the error alarm fires.
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  AppFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 200, "body": "version 1"}
+
+  AppVersion1:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref AppFunction
+      Description: First published version
+
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda
+
+  Application:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub '${AWS::StackName}-lambda-app'
+      ComputePlatform: Lambda
+
+  ErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-live-errors'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppFunction
+        - Name: Resource
+          Value: !Sub '${AppFunction}:live'
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  DeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref Application
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      DeploymentConfigName: CodeDeployDefault.LambdaCanary10Percent5Minutes
+      DeploymentStyle:
+        DeploymentType: BLUE_GREEN
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      AlarmConfiguration:
+        Enabled: true
+        Alarms:
+          - Name: !Ref ErrorAlarm
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+
+  LiveAlias:
+    Type: AWS::Lambda::Alias
+    UpdatePolicy:
+      CodeDeployLambdaAliasUpdate:
+        ApplicationName: !Ref Application
+        DeploymentGroupName: !Ref DeploymentGroup
+    Properties:
+      FunctionName: !Ref AppFunction
+      FunctionVersion: !GetAtt AppVersion1.Version
+      Name: live
+
+Outputs:
+  AliasArn:
+    Description: Invoke this ARN so traffic follows the alias
+    Value: !Ref LiveAlias
+
+  ApplicationName:
+    Description: CodeDeploy application name
+    Value: !Ref Application
