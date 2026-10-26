@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys a Lambda function from a container image stored in Amazon ECR,
+  with an ARM64 architecture, an image command override, and a managed log group.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Full image URI with a tag or digest, for example 123456789012.dkr.ecr.us-east-1.amazonaws.com/practice/app:v1
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-container-fn'
+      RetentionInDays: 7
+
+  ContainerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: FunctionLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-container-fn'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command:
+          - app.handler
+      Architectures:
+        - arm64
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt FunctionRole.Arn
+
+Outputs:
+  FunctionArn:
+    Description: ARN of the container-based function
+    Value: !GetAtt ContainerFunction.Arn
+
+  FunctionName:
+    Description: Name of the function
+    Value: !Ref ContainerFunction
