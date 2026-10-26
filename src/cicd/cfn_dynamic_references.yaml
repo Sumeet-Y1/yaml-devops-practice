@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shows CloudFormation dynamic references: the AMI comes from a public SSM
+  parameter with {{resolve:ssm:...}}, and the database credentials come from
+  a Secrets Manager secret with {{resolve:secretsmanager:...}}, so no
+  password ever appears in the template.
+
+Resources:
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}/db-credentials'
+      Description: Generated master credentials for the practice database
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 24
+        ExcludeCharacters: '"@/\'
+
+  PracticeDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.0.40'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-lt'
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+
+Outputs:
+  SecretArn:
+    Description: Secret that holds the generated credentials
+    Value: !Ref DbSecret
+
+  DatabaseEndpoint:
+    Description: Endpoint of the database
+    Value: !GetAtt PracticeDatabase.Endpoint.Address
+
+  LaunchTemplateId:
+    Description: Launch template whose AMI was resolved at deploy time
+    Value: !Ref AppLaunchTemplate
