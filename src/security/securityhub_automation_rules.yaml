@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates two Security Hub automation rules: one suppresses informational
+  findings automatically, the other marks high-severity GuardDuty findings
+  as NOTIFIED with a note. Security Hub must already be enabled.
+
+Resources:
+  SuppressInformationalRule:
+    Type: AWS::SecurityHub::AutomationRule
+    Properties:
+      RuleName: suppress-informational-findings
+      Description: Suppress active informational findings
+      RuleOrder: 1
+      RuleStatus: ENABLED
+      IsTerminal: false
+      Criteria:
+        SeverityLabel:
+          - Value: INFORMATIONAL
+            Comparison: EQUALS
+        RecordState:
+          - Value: ACTIVE
+            Comparison: EQUALS
+      Actions:
+        - Type: FINDING_FIELDS_UPDATE
+          FindingFieldsUpdate:
+            Workflow:
+              Status: SUPPRESSED
+            Note:
+              Text: Suppressed automatically by an automation rule
+              UpdatedBy: automation-rule
+
+  GuardDutyHighRule:
+    Type: AWS::SecurityHub::AutomationRule
+    Properties:
+      RuleName: notify-guardduty-high
+      Description: Mark high-severity GuardDuty findings as notified
+      RuleOrder: 2
+      RuleStatus: ENABLED
+      IsTerminal: false
+      Criteria:
+        ProductName:
+          - Value: GuardDuty
+            Comparison: EQUALS
+        SeverityLabel:
+          - Value: HIGH
+            Comparison: EQUALS
+      Actions:
+        - Type: FINDING_FIELDS_UPDATE
+          FindingFieldsUpdate:
+            Workflow:
+              Status: NOTIFIED
+            Note:
+              Text: High severity GuardDuty finding, review within 24 hours
+              UpdatedBy: automation-rule
+
+Outputs:
+  SuppressRuleArn:
+    Description: ARN of the suppression rule
+    Value: !GetAtt SuppressInformationalRule.RuleArn
+
+  GuardDutyRuleArn:
+    Description: ARN of the GuardDuty rule
+    Value: !GetAtt GuardDutyHighRule.RuleArn
