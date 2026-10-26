@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::LanguageExtensions
+Description: >
+  Uses the AWS::LanguageExtensions transform and Fn::ForEach to create one
+  SQS queue per name in a list, plus one output per queue, without
+  copy-pasting resource blocks.
+
+Parameters:
+  QueueNames:
+    Type: CommaDelimitedList
+    Default: Orders,Payments,Shipping
+    Description: Queue names (letters and numbers only, used in logical IDs)
+
+Resources:
+  Fn::ForEach::Queues:
+    - QueueName
+    - !Ref QueueNames
+    - '${QueueName}Queue':
+        Type: AWS::SQS::Queue
+        Properties:
+          Tags:
+            - Key: Purpose
+              Value: ${QueueName}
+
+Outputs:
+  Fn::ForEach::QueueUrls:
+    - QueueName
+    - !Ref QueueNames
+    - '${QueueName}QueueUrl':
+        Description: URL of the queue
+        Value: !Ref '${QueueName}Queue'
