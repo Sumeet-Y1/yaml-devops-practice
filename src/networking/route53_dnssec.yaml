@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables DNSSEC signing for a Route 53 public hosted zone using an
+  asymmetric KMS key. Must be deployed in us-east-1.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name for the new public hosted zone
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+
+  DnssecKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Asymmetric key that signs the DNSSEC zone
+      KeySpec: ECC_NIST_P256
+      KeyUsage: SIGN_VERIFY
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowRoute53DnssecSigning
+            Effect: Allow
+            Principal:
+              Service: dnssec-route53.amazonaws.com
+            Action:
+              - kms:DescribeKey
+              - kms:GetPublicKey
+              - kms:Sign
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: 'arn:aws:route53:::hostedzone/*'
+          - Sid: AllowRoute53DnssecGrants
+            Effect: Allow
+            Principal:
+              Service: dnssec-route53.amazonaws.com
+            Action: kms:CreateGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: 'true'
+
+  KeySigningKey:
+    Type: AWS::Route53::KeySigningKey
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      KeyManagementServiceArn: !GetAtt DnssecKey.Arn
+      Name: practice_ksk
+      Status: ACTIVE
+
+  Dnssec:
+    Type: AWS::Route53::DNSSEC
+    DependsOn: KeySigningKey
+    Properties:
+      HostedZoneId: !Ref HostedZone
+
+Outputs:
+  HostedZoneId:
+    Description: ID of the signed hosted zone
+    Value: !Ref HostedZone
+
+  NameServers:
+    Description: Name servers to set at your registrar
+    Value: !Join [',', !GetAtt HostedZone.NameServers]
