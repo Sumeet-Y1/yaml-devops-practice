@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Shows CloudFormation dynamic references: the AMI comes from a public SSM
-  parameter with {{resolve:ssm:...}}, and the database credentials come from
-  a Secrets Manager secret with {{resolve:secretsmanager:...}}, so no
+  parameter with a dynamic reference, and the database credentials come from
+  a Secrets Manager secret with a dynamic reference, so no
   password ever appears in the template.
 
 Resources:
@@ -21,7 +21,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: mysql
-      EngineVersion: '8.0.40'
+      EngineVersion: '8.4.11'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: '20'
       StorageEncrypted: true

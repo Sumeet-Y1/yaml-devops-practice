@@ -18,9 +18,7 @@ Resources:
     - '${QueueName}Queue':
         Type: AWS::SQS::Queue
         Properties:
-          Tags:
-            - Key: Purpose
-              Value: ${QueueName}
+          QueueName: ${QueueName}
 
 Outputs:
   Fn::ForEach::QueueUrls:
