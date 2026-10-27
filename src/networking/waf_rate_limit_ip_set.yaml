@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a regional WAFv2 web ACL with an IP block list, a rate-based rule
+  (requests per IP), an AWS managed rule group, and logging to CloudWatch
+  Logs with the Authorization header redacted.
+
+Resources:
+  BlockedIpSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub '${AWS::StackName}-blocked-ips'
+      Description: IP addresses that are always blocked
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses:
+        - 203.0.113.0/24
+        - 198.51.100.7/32
+
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-web-acl'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: WebAclMetrics
+      Rules:
+        - Name: BlockListedIps
+          Priority: 0
+          Action:
+            Block: {}
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt BlockedIpSet.Arn
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockListedIps
+        - Name: RateLimitPerIp
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 500
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitPerIp
+        - Name: AwsCommonRules
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AwsCommonRules
+
+  WafLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub 'aws-waf-logs-${AWS::StackName}'
+      RetentionInDays: 14
+
+  WafLogging:
+    Type: AWS::WAFv2::LoggingConfiguration
+    Properties:
+      ResourceArn: !GetAtt WebAcl.Arn
+      LogDestinationConfigs:
+        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${WafLogGroup}'
+      RedactedFields:
+        - SingleHeader:
+            Name: authorization
+
+Outputs:
+  WebAclArn:
+    Description: Associate this ACL with an ALB or API Gateway stage
+    Value: !GetAtt WebAcl.Arn
+
+  IpSetArn:
+    Description: Edit this IP set to change the block list
+    Value: !GetAtt BlockedIpSet.Arn
