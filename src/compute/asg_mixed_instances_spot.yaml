@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Auto Scaling group with a mixed instances policy: one
+  On-Demand base instance, the rest 75 percent Spot, spread across several
+  instance types, with capacity rebalancing.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the group
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-mixed-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '1'
+      MaxSize: '6'
+      DesiredCapacity: '4'
+      VPCZoneIdentifier: !Ref SubnetIds
+      CapacityRebalance: true
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandBaseCapacity: 1
+          OnDemandPercentageAboveBaseCapacity: 25
+          SpotAllocationStrategy: price-capacity-optimized
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+          Overrides:
+            - InstanceType: t3.micro
+            - InstanceType: t3a.micro
+            - InstanceType: t2.micro
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling group
+    Value: !Ref AutoScalingGroup
