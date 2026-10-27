@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shows well-behaved parameters (AllowedValues, AllowedPattern, MinValue,
+  ConstraintDescription) and AWS::CloudFormation::Interface metadata that
+  groups and labels them in the console.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: General
+        Parameters:
+          - Environment
+      - Label:
+          default: Network
+        Parameters:
+          - VpcCidr
+          - SubnetCidr
+      - Label:
+          default: Compute
+        Parameters:
+          - InstanceType
+          - VolumeSize
+          - LatestAmiId
+    ParameterLabels:
+      Environment:
+        default: Environment name
+      VpcCidr:
+        default: VPC CIDR block
+      SubnetCidr:
+        default: Subnet CIDR block
+      InstanceType:
+        default: Instance type
+      VolumeSize:
+        default: Root volume size (GiB)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
+
+  VpcCidr:
+    Type: String
+    Default: 10.40.0.0/16
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must look like 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+  SubnetCidr:
+    Type: String
+    Default: 10.40.1.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must look like 10.0.1.0/24
+    Description: CIDR block for the subnet
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+    Description: Instance type for the launch template
+
+  VolumeSize:
+    Type: Number
+    Default: 8
+    MinValue: 8
+    MaxValue: 100
+    ConstraintDescription: Must be between 8 and 100 GiB
+    Description: Root volume size in GiB
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-${Environment}-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        MetadataOptions:
+          HttpTokens: required
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: !Ref VolumeSize
+              VolumeType: gp3
+              Encrypted: true
+
+Outputs:
+  VpcId:
+    Description: ID of the VPC
+    Value: !Ref Vpc
+
+  SubnetId:
+    Description: ID of the subnet
+    Value: !Ref AppSubnet
+
+  LaunchTemplateId:
+    Description: ID of the launch template
+    Value: !Ref AppLaunchTemplate
