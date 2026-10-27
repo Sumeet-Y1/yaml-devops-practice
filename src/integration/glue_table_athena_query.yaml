@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Defines a Glue Data Catalog table by hand (columns, CSV SerDe, partition
+  key) over S3 data, an Athena workgroup, and a saved Athena query, so you
+  can query the data with no crawler.
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: practice_orders_db
+    AllowedPattern: '[a-z0-9_]+'
+    Description: Glue database name (lowercase letters, numbers, underscores)
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OrdersDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseName
+        Description: Database for the orders table
+
+  OrdersTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref OrdersDatabase
+      TableInput:
+        Name: orders
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: csv
+          skip.header.line.count: '1'
+        PartitionKeys:
+          - Name: order_date
+            Type: string
+        StorageDescriptor:
+          Location: !Sub 's3://${DataBucket}/orders/'
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+            Parameters:
+              field.delim: ','
+          Columns:
+            - Name: order_id
+              Type: string
+            - Name: customer_id
+              Type: string
+            - Name: total
+              Type: double
+
+  QueryWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-wg'
+      Description: Workgroup with a fixed result location
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${DataBucket}/athena-results/'
+
+  TopCustomersQuery:
+    Type: AWS::Athena::NamedQuery
+    DependsOn: OrdersTable
+    Properties:
+      Name: top-customers-by-revenue
+      Description: Ten customers with the highest total spend
+      Database: !Ref OrdersDatabase
+      WorkGroup: !Ref QueryWorkGroup
+      QueryString: >
+        SELECT customer_id, SUM(total) AS revenue
+        FROM orders
+        GROUP BY customer_id
+        ORDER BY revenue DESC
+        LIMIT 10;
+
+Outputs:
+  DataBucketName:
+    Description: Upload CSV files under orders/order_date=YYYY-MM-DD/
+    Value: !Ref DataBucket
+
+  WorkGroupName:
+    Description: Athena workgroup to run queries in
+    Value: !Ref QueryWorkGroup
