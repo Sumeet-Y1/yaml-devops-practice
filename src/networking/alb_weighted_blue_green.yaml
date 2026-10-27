@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Shifts traffic between two target groups (blue and green) on an
+  Application Load Balancer using weighted forwarding and session stickiness.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the target groups and security group
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two public subnets
+
+  BlueWeight:
+    Type: Number
+    Default: 90
+    MinValue: 0
+    MaxValue: 999
+    Description: Weight for the current (blue) version
+
+  GreenWeight:
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 999
+    Description: Weight for the new (green) version
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from the internet
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  BlueTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /
+
+  GreenTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref BlueTargetGroup
+                Weight: !Ref BlueWeight
+              - TargetGroupArn: !Ref GreenTargetGroup
+                Weight: !Ref GreenWeight
+            TargetGroupStickinessConfig:
+              Enabled: true
+              DurationSeconds: 3600
+
+Outputs:
+  AlbDnsName:
+    Description: Update the weights and redeploy to shift traffic
+    Value: !GetAtt LoadBalancer.DNSName
+
+  BlueTargetGroupArn:
+    Description: Register the current version here
+    Value: !Ref BlueTargetGroup
+
+  GreenTargetGroupArn:
+    Description: Register the new version here
+    Value: !Ref GreenTargetGroup
