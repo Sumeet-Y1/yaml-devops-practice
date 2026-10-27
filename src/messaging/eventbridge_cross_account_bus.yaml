@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom EventBridge bus that accepts events from one trusted
+  AWS account through a bus policy, and routes those events to an SQS queue.
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    Description: 12-digit account ID allowed to send events to this bus
+    AllowedPattern: '[0-9]{12}'
+
+Resources:
+  SharedBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-shared-bus'
+
+  TrustedAccountPolicy:
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+      EventBusName: !Ref SharedBus
+      StatementId: AllowTrustedAccountPutEvents
+      Statement:
+        Effect: Allow
+        Principal:
+          AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+        Action: events:PutEvents
+        Resource: !GetAtt SharedBus.Arn
+
+  ReceivedEventsQueue:
+    Type: AWS::SQS::Queue
+
+  PartnerOrdersRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-partner-orders'
+      EventBusName: !Ref SharedBus
+      EventPattern:
+        source:
+          - partner.orders
+        account:
+          - !Ref TrustedAccountId
+      Targets:
+        - Id: ReceivedEventsTarget
+          Arn: !GetAtt ReceivedEventsQueue.Arn
+
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ReceivedEventsQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ReceivedEventsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt PartnerOrdersRule.Arn
+
+Outputs:
+  SharedBusArn:
+    Description: The trusted account sends events to this ARN
+    Value: !GetAtt SharedBus.Arn
+
+  ReceivedEventsQueueUrl:
+    Description: Matching events from the trusted account land here
+    Value: !Ref ReceivedEventsQueue
