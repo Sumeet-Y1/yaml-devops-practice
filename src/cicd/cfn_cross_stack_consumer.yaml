@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Cross-stack consumer: imports the VPC and subnet exported by the producer
+  stack with Fn::ImportValue and launches an instance with a security group in them.
+
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: practice-network
+    Description: Name of the producer stack whose exports are imported
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from anywhere
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  WebInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SubnetId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-SubnetId'
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-web'
+
+Outputs:
+  InstanceId:
+    Description: Instance launched into the imported subnet
+    Value: !Ref WebInstance
+
+  SecurityGroupId:
+    Description: Security group created in the imported VPC
+    Value: !Ref WebSecurityGroup
