@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Puts a custom domain name in front of an API Gateway REST API: a regional
+  domain with an ACM certificate, a base path mapping, and a Route 53 alias record.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Custom domain, for example api.example.com
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN in the same region as the API
+
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that contains the domain
+
+Resources:
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+
+  HelloMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !GetAtt RestApi.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: '{"message": "hello from a custom domain"}'
+      MethodResponses:
+        - StatusCode: '200'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: HelloMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref DomainName
+      RegionalCertificateArn: !Ref CertificateArn
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      SecurityPolicy: TLS_1_2
+
+  BasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref RestApi
+      Stage: !Ref ProdStage
+      BasePath: v1
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+
+Outputs:
+  ApiUrl:
+    Description: Call this URL once DNS has propagated
+    Value: !Sub 'https://${DomainName}/v1'
