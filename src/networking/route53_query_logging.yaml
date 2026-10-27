@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Logs every DNS query for a Route 53 public hosted zone to CloudWatch
+  Logs, including the resource policy that lets Route 53 write to the log
+  group. Must be deployed in us-east-1.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name for the new public hosted zone
+
+Rules:
+  MustBeUsEast1:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Route 53 query logs must go to a log group in us-east-1
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+
+  QueryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/route53/${DomainName}'
+      RetentionInDays: 14
+
+  QueryLogPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: Route53QueryLogging
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Route53LogsToCloudWatchLogs",
+              "Effect": "Allow",
+              "Principal": { "Service": "route53.amazonaws.com" },
+              "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+              "Resource": "${QueryLogGroup.Arn}"
+            }
+          ]
+        }
+
+  QueryLogging:
+    Type: AWS::Route53::QueryLoggingConfig
+    DependsOn: QueryLogPolicy
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      CloudWatchLogsLogGroupArn: !GetAtt QueryLogGroup.Arn
+
+Outputs:
+  HostedZoneId:
+    Description: ID of the hosted zone
+    Value: !Ref HostedZone
+
+  QueryLogGroupName:
+    Description: DNS queries are logged here
+    Value: !Ref QueryLogGroup
