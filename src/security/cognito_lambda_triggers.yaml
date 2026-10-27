@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Cognito user pool with two Lambda triggers: a pre sign-up
+  trigger that only allows example.com emails and auto-confirms them, and a
+  post confirmation trigger that logs new users.
+
+Resources:
+  TriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  PreSignUpFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt TriggerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              email = event["request"]["userAttributes"].get("email", "")
+              if not email.endswith("@example.com"):
+                  raise Exception("Only example.com emails can sign up")
+              event["response"]["autoConfirmUser"] = True
+              event["response"]["autoVerifyEmail"] = True
+              return event
+
+  PostConfirmationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt TriggerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("New user confirmed:", event["userName"])
+              return event
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
+        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
+
+  PreSignUpPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PreSignUpFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  PostConfirmationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PostConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: web-app
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+Outputs:
+  UserPoolId:
+    Description: User pool with Lambda triggers
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Description: App client ID
+    Value: !Ref UserPoolClient
