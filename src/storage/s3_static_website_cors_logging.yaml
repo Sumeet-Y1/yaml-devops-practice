@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Hosts a static website from S3 with index and error documents, a CORS
+  rule, public read access, and server access logging to a separate bucket.
+
+Parameters:
+  BucketPrefix:
+    Type: String
+    Default: practice-site
+    AllowedPattern: '[a-z0-9-]+'
+    Description: Lowercase prefix for both bucket names
+
+Resources:
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-logs-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowS3ServerAccessLogs
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LogBucket.Arn}/access-logs/*'
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::${BucketPrefix}-site-${AWS::AccountId}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: LogBucketPolicy
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-site-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - https://example.com
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LogBucket
+        LogFilePrefix: access-logs/
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadForWebsite
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+
+Outputs:
+  WebsiteUrl:
+    Description: S3 website endpoint (HTTP only, put CloudFront in front for HTTPS)
+    Value: !GetAtt SiteBucket.WebsiteURL
+
+  LogBucketName:
+    Description: Access logs are delivered here
+    Value: !Ref LogBucket
