@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Compares DeletionPolicy and UpdateReplacePolicy values side by side:
+  Retain, Snapshot, RetainExceptOnCreate, and Delete.
+
+Resources:
+  RetainedBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SnapshotVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Size: 10
+      VolumeType: gp3
+      Encrypted: true
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+
+  DisposableQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+Outputs:
+  RetainedBucketName:
+    Description: Survives stack deletion and resource replacement
+    Value: !Ref RetainedBucket
+
+  SnapshotVolumeId:
+    Description: A snapshot is taken before the volume is deleted
+    Value: !Ref SnapshotVolume
+
+  OrdersTableName:
+    Description: Retained on delete, but removed if the stack's first creation rolls back
+    Value: !Ref OrdersTable
+
+  DisposableQueueUrl:
+    Description: Deleted together with the stack
+    Value: !Ref DisposableQueue
