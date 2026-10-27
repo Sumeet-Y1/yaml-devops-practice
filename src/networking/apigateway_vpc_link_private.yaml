@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Exposes a private service behind a Network Load Balancer through API
+  Gateway using a VPC Link and an HTTP_PROXY integration.
+
+Parameters:
+  NlbArn:
+    Type: String
+    Description: ARN of the internal Network Load Balancer
+
+  NlbDnsName:
+    Type: String
+    Description: DNS name of that Network Load Balancer
+
+Resources:
+  PrivateLink:
+    Type: AWS::ApiGateway::VpcLink
+    Properties:
+      Name: !Sub '${AWS::StackName}-vpc-link'
+      Description: Connects API Gateway to the private NLB
+      TargetArns:
+        - !Ref NlbArn
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-private-api'
+
+  ItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: items
+
+  ItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ItemsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub 'http://${NlbDnsName}/items'
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref PrivateLink
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ItemsMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+Outputs:
+  ItemsUrl:
+    Description: Public URL that forwards to the private service
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/items'
+
+  VpcLinkId:
+    Description: ID of the VPC Link
+    Value: !Ref PrivateLink
