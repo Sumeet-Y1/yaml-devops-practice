@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configures two ECR registry features: a pull-through cache rule that
+  mirrors public.ecr.aws images into your private registry, and replication
+  of repositories whose names start with prod to another region.
+
+Parameters:
+  CachePrefix:
+    Type: String
+    Default: ecr-public
+    Description: Prefix used for cached repositories in your private registry
+
+  ReplicaRegion:
+    Type: String
+    Default: us-west-2
+    Description: Region that receives replicated images (must differ from this region)
+
+Resources:
+  PullThroughCache:
+    Type: AWS::ECR::PullThroughCacheRule
+    Properties:
+      EcrRepositoryPrefix: !Ref CachePrefix
+      UpstreamRegistryUrl: public.ecr.aws
+
+  RegistryReplication:
+    Type: AWS::ECR::ReplicationConfiguration
+    Properties:
+      ReplicationConfiguration:
+        Rules:
+          - Destinations:
+              - Region: !Ref ReplicaRegion
+                RegistryId: !Ref AWS::AccountId
+            RepositoryFilters:
+              - Filter: prod
+                FilterType: PREFIX_MATCH
+
+Outputs:
+  PullThroughExample:
+    Description: Pull an upstream image through your private registry
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${CachePrefix}/<upstream-repo>:<tag>'
