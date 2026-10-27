@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an Express Step Functions workflow that validates an order with
+  a Choice state, then saves it to DynamoDB through a direct SDK integration
+  (no Lambda function), with retries and full CloudWatch logging.
+
+Resources:
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+
+  WorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}'
+      RetentionInDays: 7
+
+  WorkflowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WorkflowAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt OrdersTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  OrderWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-order-workflow'
+      StateMachineType: EXPRESS
+      RoleArn: !GetAtt WorkflowRole.Arn
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt WorkflowLogGroup.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Validate an order and save it to DynamoDB with an SDK integration",
+          "StartAt": "ValidateOrder",
+          "States": {
+            "ValidateOrder": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.quantity",
+                  "NumericGreaterThan": 0,
+                  "Next": "SaveOrder"
+                }
+              ],
+              "Default": "RejectOrder"
+            },
+            "SaveOrder": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:putItem",
+              "Parameters": {
+                "TableName": "${OrdersTable}",
+                "Item": {
+                  "orderId": { "S.$": "$.orderId" },
+                  "quantity": { "N.$": "States.Format('{}', $.quantity)" }
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            },
+            "RejectOrder": {
+              "Type": "Fail",
+              "Error": "InvalidOrder",
+              "Cause": "Quantity must be greater than zero"
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Description: Start it with aws stepfunctions start-sync-execution
+    Value: !Ref OrderWorkflow
+
+  OrdersTableName:
+    Description: Valid orders are saved here
+    Value: !Ref OrdersTable
