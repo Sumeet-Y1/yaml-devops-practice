@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Runs a Lambda@Edge function on viewer requests of a CloudFront
+  distribution. The function must be created in us-east-1.
+
+Parameters:
+  OriginDomain:
+    Type: String
+    Default: example.com
+    Description: Domain name of the HTTPS origin
+
+Rules:
+  MustBeUsEast1:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Lambda@Edge functions must be created in us-east-1
+
+Resources:
+  EdgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  EdgeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt EdgeRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            const request = event.Records[0].cf.request;
+            request.headers['x-edge-processed'] = [
+              { key: 'X-Edge-Processed', value: 'true' }
+            ];
+            return request;
+          };
+
+  EdgeFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref EdgeFunction
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Distribution with a Lambda@Edge viewer-request function
+        Origins:
+          - Id: main-origin
+            DomainName: !Ref OriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: main-origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          LambdaFunctionAssociations:
+            - EventType: viewer-request
+              LambdaFunctionARN: !Ref EdgeFunctionVersion
+
+Outputs:
+  DistributionDomain:
+    Description: CloudFront domain name
+    Value: !GetAtt Distribution.DomainName
+
+  EdgeFunctionVersionArn:
+    Description: Versioned ARN required by Lambda@Edge associations
+    Value: !Ref EdgeFunctionVersion
