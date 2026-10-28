@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an encrypted EFS file system with elastic throughput, lifecycle
+  rules that move cold files to Infrequent Access, automatic backups, and a
+  file system policy that denies non-TLS connections.
+
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: elastic
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+        - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      BackupPolicy:
+        Status: ENABLED
+      FileSystemPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNonTls
+            Effect: Deny
+            Principal:
+              AWS: '*'
+            Action: '*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-efs'
+
+Outputs:
+  FileSystemId:
+    Description: ID of the file system
+    Value: !Ref FileSystem
+
+  FileSystemArn:
+    Description: ARN of the file system
+    Value: !GetAtt FileSystem.Arn
