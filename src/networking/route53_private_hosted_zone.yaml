@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Route 53 private hosted zone attached to a VPC, with records
+  that only resolve for resources inside that VPC.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that can resolve names in this zone
+
+  DomainName:
+    Type: String
+    Default: corp.internal
+    Description: Private domain name
+
+  DatabaseIp:
+    Type: String
+    Default: 10.0.1.25
+    Description: Private IP address for the db record
+
+Resources:
+  PrivateZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: Private zone for internal service names
+      VPCs:
+        - VPCId: !Ref VpcId
+          VPCRegion: !Ref AWS::Region
+
+  DatabaseRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref PrivateZone
+      Name: !Sub 'db.${DomainName}'
+      Type: A
+      TTL: '60'
+      ResourceRecords:
+        - !Ref DatabaseIp
+
+  CacheAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref PrivateZone
+      Name: !Sub 'cache.${DomainName}'
+      Type: CNAME
+      TTL: '60'
+      ResourceRecords:
+        - !Sub 'db.${DomainName}'
+
+Outputs:
+  HostedZoneId:
+    Description: ID of the private hosted zone
+    Value: !Ref PrivateZone
+
+  DatabaseName:
+    Description: Resolves only from inside the associated VPC
+    Value: !Sub 'db.${DomainName}'
