@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configures an API Gateway REST API stage with JSON access logs,
+  per-method throttling and metrics, X-Ray tracing, and a stage variable.
+  Includes the account-level CloudWatch role that API Gateway needs.
+
+Resources:
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  ApiAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/apigateway/${AWS::StackName}/access'
+      RetentionInDays: 14
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-logged-api'
+
+  PingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !GetAtt RestApi.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: '{"message": "pong"}'
+      MethodResponses:
+        - StatusCode: '200'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PingMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    DependsOn: ApiAccount
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      TracingEnabled: true
+      Variables:
+        environment: prod
+      AccessLogSetting:
+        DestinationArn: !GetAtt AccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latency":"$context.responseLatency"}'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          LoggingLevel: INFO
+          ThrottlingRateLimit: 50
+          ThrottlingBurstLimit: 100
+
+Outputs:
+  ApiUrl:
+    Description: Call it, then check the access log group
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/'
+
+  AccessLogGroupName:
+    Description: JSON access logs are written here
+    Value: !Ref AccessLogGroup
