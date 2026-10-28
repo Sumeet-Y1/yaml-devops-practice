@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Standard Step Functions workflow that uses a Map state to
+  process a list of items, a Parallel state for two branches, and a Catch
+  that routes failures to a Fail state.
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ProcessFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"processed": event}
+
+  WorkflowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeProcessFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ProcessFunction.Arn
+
+  BatchWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-batch-workflow'
+      RoleArn: !GetAtt WorkflowRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Map over items, run two branches in parallel, handle failures",
+          "StartAt": "ProcessItems",
+          "States": {
+            "ProcessItems": {
+              "Type": "Map",
+              "ItemsPath": "$.items",
+              "MaxConcurrency": 2,
+              "ItemProcessor": {
+                "ProcessorConfig": { "Mode": "INLINE" },
+                "StartAt": "ProcessOne",
+                "States": {
+                  "ProcessOne": {
+                    "Type": "Task",
+                    "Resource": "${ProcessFunction.Arn}",
+                    "End": true
+                  }
+                }
+              },
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleFailure"
+                }
+              ],
+              "Next": "ParallelSteps"
+            },
+            "ParallelSteps": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "Summarize",
+                  "States": { "Summarize": { "Type": "Pass", "End": true } }
+                },
+                {
+                  "StartAt": "Audit",
+                  "States": { "Audit": { "Type": "Pass", "End": true } }
+                }
+              ],
+              "End": true
+            },
+            "HandleFailure": {
+              "Type": "Fail",
+              "Error": "ProcessingFailed",
+              "Cause": "One or more items failed to process"
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Description: Start it with input like {"items": [1, 2, 3]}
+    Value: !Ref BatchWorkflow
