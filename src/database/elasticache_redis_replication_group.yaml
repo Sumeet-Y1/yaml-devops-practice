@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an ElastiCache Redis replication group with a primary and a
+  replica in different Availability Zones, automatic failover, Multi-AZ,
+  and encryption at rest and in transit.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in at least two Availability Zones
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing TCP 6379 from clients
+
+Resources:
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnets for the Redis replication group
+      SubnetIds: !Ref SubnetIds
+
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription: Practice Redis with a replica and failover
+      Engine: redis
+      EngineVersion: '7.1'
+      CacheNodeType: cache.t3.micro
+      NumCacheClusters: 2
+      AutomaticFailoverEnabled: true
+      MultiAZEnabled: true
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      Port: 6379
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SnapshotRetentionLimit: 1
+
+Outputs:
+  PrimaryEndpoint:
+    Description: Send writes here
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+
+  ReaderEndpoint:
+    Description: Send reads here
+    Value: !GetAtt RedisReplicationGroup.ReaderEndPoint.Address
