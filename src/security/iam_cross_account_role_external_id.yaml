@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an IAM role that another AWS account can assume, protected by an
+  external ID (against the confused deputy problem) and an MFA requirement.
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    Description: 12-digit account ID allowed to assume the role
+    AllowedPattern: '[0-9]{12}'
+
+  ExternalId:
+    Type: String
+    MinLength: 8
+    Description: Shared secret the caller must pass when assuming the role
+
+Resources:
+  CrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-cross-account-readonly'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+              Bool:
+                aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+Outputs:
+  RoleArn:
+    Description: ARN the trusted account passes to sts:AssumeRole
+    Value: !GetAtt CrossAccountRole.Arn
