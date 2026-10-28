@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an AWS Backup vault with a vault lock (retention limits), a daily
+  backup plan that also copies each backup to another vault, and a tag-based
+  selection of resources tagged Backup=true.
+
+Parameters:
+  DestinationVaultArn:
+    Type: String
+    Description: ARN of the backup vault that receives the copies (often in another region)
+
+Resources:
+  PrimaryVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: !Sub '${AWS::StackName}-primary-vault'
+      LockConfiguration:
+        MinRetentionDays: 7
+        MaxRetentionDays: 365
+
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+
+  DailyPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub '${AWS::StackName}-daily-with-copy'
+        BackupPlanRule:
+          - RuleName: daily-with-copy
+            TargetBackupVault: !Ref PrimaryVault
+            ScheduleExpression: cron(0 5 * * ? *)
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 35
+            CopyActions:
+              - DestinationBackupVaultArn: !Ref DestinationVaultArn
+                Lifecycle:
+                  DeleteAfterDays: 90
+
+  TaggedResources:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref DailyPlan
+      BackupSelection:
+        SelectionName: tagged-backup-true
+        IamRoleArn: !GetAtt BackupRole.Arn
+        ListOfTags:
+          - ConditionType: STRINGEQUALS
+            ConditionKey: Backup
+            ConditionValue: 'true'
+
+Outputs:
+  PrimaryVaultName:
+    Description: Vault with retention limits enforced by the lock
+    Value: !Ref PrimaryVault
+
+  BackupPlanId:
+    Description: ID of the backup plan
+    Value: !Ref DailyPlan
