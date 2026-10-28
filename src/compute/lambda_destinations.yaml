@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configures Lambda asynchronous invocation destinations: successful
+  results go to an SQS queue and failures (after one retry) go to an SNS topic.
+
+Resources:
+  SuccessQueue:
+    Type: AWS::SQS::Queue
+
+  FailureTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-lambda-failures'
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SendToDestinations
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SuccessQueue.Arn
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref FailureTopic
+
+  WorkerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              if event.get("fail"):
+                  raise Exception("Requested failure")
+              return {"status": "ok"}
+
+  AsyncConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref WorkerFunction
+      Qualifier: '$LATEST'
+      MaximumRetryAttempts: 1
+      MaximumEventAgeInSeconds: 3600
+      DestinationConfig:
+        OnSuccess:
+          Destination: !GetAtt SuccessQueue.Arn
+        OnFailure:
+          Destination: !Ref FailureTopic
+
+Outputs:
+  FunctionName:
+    Description: Invoke asynchronously with {"fail": true} to test the failure path
+    Value: !Ref WorkerFunction
+
+  SuccessQueueUrl:
+    Description: Receives records of successful invocations
+    Value: !Ref SuccessQueue
+
+  FailureTopicArn:
+    Description: Receives records of failed invocations
+    Value: !Ref FailureTopic
