@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Kinesis Data Firehose delivery stream that runs each batch of
+  records through a Lambda transformation before writing to S3, and keeps a
+  backup copy of the untransformed source records.
+
+Resources:
+  DeliveryBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  TransformRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  TransformFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt TransformRole.Arn
+      Code:
+        ZipFile: |
+          import base64
+
+          def handler(event, context):
+              output = []
+              for record in event["records"]:
+                  text = base64.b64decode(record["data"]).decode("utf-8")
+                  transformed = text.upper().rstrip("\n") + "\n"
+                  output.append({
+                      "recordId": record["recordId"],
+                      "result": "Ok",
+                      "data": base64.b64encode(transformed.encode("utf-8")).decode("utf-8"),
+                  })
+              return {"records": output}
+
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FirehoseAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt DeliveryBucket.Arn
+                  - !Sub '${DeliveryBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource: !GetAtt TransformFunction.Arn
+
+  DeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub '${AWS::StackName}-transform-stream'
+      DeliveryStreamType: DirectPut
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt DeliveryBucket.Arn
+        RoleARN: !GetAtt FirehoseRole.Arn
+        Prefix: transformed/
+        ErrorOutputPrefix: errors/
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 3
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !GetAtt TransformFunction.Arn
+        S3BackupMode: Enabled
+        S3BackupConfiguration:
+          BucketARN: !GetAtt DeliveryBucket.Arn
+          RoleARN: !GetAtt FirehoseRole.Arn
+          Prefix: source-backup/
+
+Outputs:
+  DeliveryStreamName:
+    Description: Send records here, they arrive in S3 uppercased
+    Value: !Ref DeliveryStream
+
+  DeliveryBucketName:
+    Description: Check transformed/ and source-backup/ prefixes
+    Value: !Ref DeliveryBucket
