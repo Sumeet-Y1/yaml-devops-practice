@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a Step Functions workflow that pauses until an external system
+  returns a task token (the callback pattern), for example a human approval.
+  The token is sent in an SQS message, and the workflow waits up to one hour.
+
+Resources:
+  ApprovalQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  WorkflowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendApprovalRequest
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ApprovalQueue.Arn
+
+  ApprovalWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-approval-workflow'
+      RoleArn: !GetAtt WorkflowRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Wait for an external approval using a task token",
+          "StartAt": "WaitForApproval",
+          "States": {
+            "WaitForApproval": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+              "Parameters": {
+                "QueueUrl": "${ApprovalQueue}",
+                "MessageBody": {
+                  "orderId.$": "$.orderId",
+                  "taskToken.$": "$$.Task.Token"
+                }
+              },
+              "TimeoutSeconds": 3600,
+              "Next": "Approved"
+            },
+            "Approved": {
+              "Type": "Succeed"
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Description: Start it with {"orderId": "123"}, then read the token from the queue
+    Value: !Ref ApprovalWorkflow
+
+  ApprovalQueueUrl:
+    Description: Approvers read the task token here, then call send-task-success
+    Value: !Ref ApprovalQueue
