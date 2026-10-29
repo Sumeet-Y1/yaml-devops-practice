@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Subscribes a Lambda function to an SNS topic with a redrive policy, so
+  messages that SNS cannot deliver to the function are saved in an SQS
+  dead-letter queue instead of being lost.
+
+Resources:
+  EventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-events'
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  Subscriber:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              for record in event["Records"]:
+                  print("Message:", record["Sns"]["Message"])
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Subscriber
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref EventsTopic
+
+  SubscriptionDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  SubscriptionDlqPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SubscriptionDlq
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SubscriptionDlq.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref EventsTopic
+
+  LambdaSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn: SubscriptionDlqPolicy
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: lambda
+      Endpoint: !GetAtt Subscriber.Arn
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SubscriptionDlq.Arn
+
+Outputs:
+  TopicArn:
+    Description: Publish messages here
+    Value: !Ref EventsTopic
+
+  DlqUrl:
+    Description: Undeliverable messages are stored here
+    Value: !Ref SubscriptionDlq
