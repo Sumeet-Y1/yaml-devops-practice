@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates three chained security groups (load balancer, app, database) where
+  each tier only accepts traffic from the tier in front of it, using security
+  group references instead of CIDR blocks.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the security groups
+
+Resources:
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public entry point, allows HTTP and HTTPS from anywhere
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from the internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from the internet
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App tier, accepts traffic only from the load balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: App port from the load balancer
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database tier, accepts traffic only from the app tier
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+          Description: MySQL from the app tier
+
+Outputs:
+  LoadBalancerSecurityGroupId:
+    Description: Attach to the load balancer
+    Value: !Ref LoadBalancerSecurityGroup
+
+  AppSecurityGroupId:
+    Description: Attach to the application instances
+    Value: !Ref AppSecurityGroup
+
+  DatabaseSecurityGroupId:
+    Description: Attach to the database
+    Value: !Ref DatabaseSecurityGroup
