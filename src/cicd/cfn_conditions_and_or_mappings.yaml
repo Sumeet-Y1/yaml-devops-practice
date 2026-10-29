@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Practices CloudFormation conditions built from Fn::And, Fn::Or, and
+  Fn::Not, conditional resources and outputs, Fn::If with AWS::NoValue,
+  and a Mappings table that sets log retention per environment.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Optional email for alerts (leave empty to skip the topic)
+
+Mappings:
+  RetentionByEnvironment:
+    dev:
+      Days: 7
+    prod:
+      Days: 90
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  HasEmail: !Not [!Equals [!Ref AlertEmail, '']]
+  CreateAlerts: !And
+    - !Condition IsProd
+    - !Condition HasEmail
+  IsDevOrNoEmail: !Or
+    - !Not [!Condition IsProd]
+    - !Not [!Condition HasEmail]
+
+Resources:
+  AppBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration: !If
+        - IsProd
+        - Status: Enabled
+        - !Ref 'AWS::NoValue'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !FindInMap [RetentionByEnvironment, !Ref Environment, Days]
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: CreateAlerts
+    Properties:
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+Outputs:
+  BucketName:
+    Description: Versioned only in prod
+    Value: !Ref AppBucket
+
+  LogRetentionDays:
+    Description: Looked up from the mapping
+    Value: !FindInMap [RetentionByEnvironment, !Ref Environment, Days]
+
+  AlertTopicArn:
+    Condition: CreateAlerts
+    Description: Only exists in prod when an email was given
+    Value: !Ref AlertTopic
+
+  AlertsSkipped:
+    Condition: IsDevOrNoEmail
+    Description: Shown when no alert topic was created
+    Value: 'No alert topic in this stack'
