@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Attaches a VPC to an existing Transit Gateway and controls routing with
+  a dedicated route table: an association, a propagation, and a blackhole
+  route that drops traffic to a blocked network. Works best when the Transit
+  Gateway has default route table association and propagation turned off.
+
+Parameters:
+  TransitGatewayId:
+    Type: String
+    Description: ID of the existing Transit Gateway (tgw-...)
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to attach
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: One subnet per Availability Zone for the attachment
+
+  BlockedCidr:
+    Type: String
+    Default: 192.168.100.0/24
+    Description: Network whose traffic is dropped by a blackhole route
+
+Resources:
+  VpcAttachment:
+    Type: AWS::EC2::TransitGatewayVpcAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGatewayId
+      VpcId: !Ref VpcId
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-attachment'
+
+  SpokeRouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      TransitGatewayId: !Ref TransitGatewayId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-spoke-rt'
+
+  RouteTableAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref VpcAttachment
+      TransitGatewayRouteTableId: !Ref SpokeRouteTable
+
+  RouteTablePropagation:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref VpcAttachment
+      TransitGatewayRouteTableId: !Ref SpokeRouteTable
+
+  BlockedNetworkRoute:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref SpokeRouteTable
+      DestinationCidrBlock: !Ref BlockedCidr
+      Blackhole: true
+
+Outputs:
+  AttachmentId:
+    Description: ID of the VPC attachment
+    Value: !Ref VpcAttachment
+
+  RouteTableId:
+    Description: ID of the Transit Gateway route table
+    Value: !Ref SpokeRouteTable
