@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Uses an EventBridge input transformer to turn a raw EC2 state-change
+  event into a short human-readable email through SNS.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives the messages
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-ec2-state'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  NotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref NotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref NotificationTopic
+
+  StateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-ec2-state-change'
+      Description: Email when an instance stops or terminates
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+        detail:
+          state:
+            - stopped
+            - terminated
+      Targets:
+        - Id: EmailTarget
+          Arn: !Ref NotificationTopic
+          InputTransformer:
+            InputPathsMap:
+              instance: '$.detail.instance-id'
+              state: '$.detail.state'
+              time: '$.time'
+            InputTemplate: '"EC2 instance <instance> changed to <state> at <time>"'
+
+Outputs:
+  RuleName:
+    Description: Stop a test instance to receive the email
+    Value: !Ref StateChangeRule
+
+  TopicArn:
+    Description: SNS topic that sends the emails
+    Value: !Ref NotificationTopic
