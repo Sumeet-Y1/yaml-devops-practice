@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Launches an EC2 instance with an instance profile for Systems Manager
+  and the CloudWatch agent, and stores the agent configuration in an SSM
+  parameter so memory and disk metrics are collected automatically.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the instance
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  AgentConfigParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: AmazonCloudWatch-practice-linux
+      Type: String
+      Description: CloudWatch agent configuration for memory and disk metrics
+      Value: |
+        {
+          "metrics": {
+            "namespace": "Practice/Host",
+            "metrics_collected": {
+              "mem": { "measurement": ["mem_used_percent"] },
+              "disk": { "measurement": ["used_percent"], "resources": ["/"] }
+            }
+          }
+        }
+
+  AppInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AgentConfigParameter
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SubnetId: !Ref SubnetId
+      IamInstanceProfile: !Ref InstanceProfile
+      MetadataOptions:
+        HttpTokens: required
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf install -y amazon-cloudwatch-agent
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-practice-linux
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-app'
+
+Outputs:
+  InstanceId:
+    Description: Connect with Session Manager, no SSH key or open port needed
+    Value: !Ref AppInstance
+
+  AgentConfigName:
+    Description: SSM parameter holding the agent configuration
+    Value: !Ref AgentConfigParameter
