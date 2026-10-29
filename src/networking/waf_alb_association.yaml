@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a regional WAFv2 web ACL with two AWS managed rule groups and
+  associates it with an Application Load Balancer.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the load balancer security group
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two public subnets
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from the internet
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: '200'
+            ContentType: text/plain
+            MessageBody: protected by WAF
+
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-alb-acl'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: AlbWebAcl
+      Rules:
+        - Name: AwsCommonRules
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AwsCommonRules
+        - Name: AwsKnownBadInputs
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AwsKnownBadInputs
+
+  WebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: HttpListener
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLArn: !GetAtt WebAcl.Arn
+
+Outputs:
+  AlbDnsName:
+    Description: Requests to this load balancer are inspected by the web ACL
+    Value: !GetAtt LoadBalancer.DNSName
+
+  WebAclArn:
+    Description: ARN of the web ACL
+    Value: !GetAtt WebAcl.Arn
