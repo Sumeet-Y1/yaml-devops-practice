@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a custom DHCP options set (domain name, DNS servers, and NTP
+  server) and associates it with an existing VPC.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that receives the DHCP options
+
+  DomainName:
+    Type: String
+    Default: practice.internal
+    Description: Domain name handed to instances
+
+Resources:
+  DhcpOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameServers:
+        - AmazonProvidedDNS
+      NtpServers:
+        - 169.254.169.123
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-dhcp'
+
+  DhcpAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId: !Ref VpcId
+      DhcpOptionsId: !Ref DhcpOptions
+
+Outputs:
+  DhcpOptionsId:
+    Description: ID of the DHCP options set
+    Value: !Ref DhcpOptions
