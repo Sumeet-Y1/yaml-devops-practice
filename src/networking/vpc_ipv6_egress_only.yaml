@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a dual-stack (IPv4 and IPv6) VPC with a public subnet that uses
+  an internet gateway and a private subnet that reaches the internet over
+  IPv6 only through an egress-only internet gateway.
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.60.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  Ipv6Block:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      VpcId: !Ref Vpc
+      AmazonProvidedIpv6CidrBlock: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  EgressOnlyGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    DependsOn: Ipv6Block
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.60.1.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt Vpc.Ipv6CidrBlocks], 2, 64]]
+      AssignIpv6AddressOnCreation: true
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public'
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    DependsOn: Ipv6Block
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.60.2.0/24
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt Vpc.Ipv6CidrBlocks], 2, 64]]
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-private'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicIpv4Route:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicIpv6Route:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationIpv6CidrBlock: '::/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PrivateIpv6Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationIpv6CidrBlock: '::/0'
+      EgressOnlyInternetGatewayId: !Ref EgressOnlyGateway
+
+  PrivateAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+  VpcId:
+    Description: ID of the dual-stack VPC
+    Value: !Ref Vpc
+
+  VpcIpv6Cidr:
+    Description: IPv6 CIDR block assigned by AWS
+    Value: !Select [0, !GetAtt Vpc.Ipv6CidrBlocks]
+
+  PrivateSubnetId:
+    Description: Outbound IPv6 only, no inbound connections
+    Value: !Ref PrivateSubnet
