@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Logs log group with a data protection policy that
+  audits and masks sensitive data (email addresses, AWS secret keys, and
+  a custom employee ID pattern) as log events arrive.
+
+Resources:
+  ProtectedLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/app'
+      RetentionInDays: 14
+      DataProtectionPolicy:
+        Name: practice-data-protection
+        Description: Audit and mask sensitive values
+        Version: '2021-06-01'
+        Configuration:
+          CustomDataIdentifier:
+            - Name: EmployeeId
+              Regex: 'EMP-[0-9]{6}'
+        Statement:
+          - Sid: audit-sensitive-data
+            DataIdentifier:
+              - arn:aws:dataprotection::aws:data-identifier/EmailAddress
+              - arn:aws:dataprotection::aws:data-identifier/AwsSecretKey
+              - EmployeeId
+            Operation:
+              Audit:
+                FindingsDestination: {}
+          - Sid: mask-sensitive-data
+            DataIdentifier:
+              - arn:aws:dataprotection::aws:data-identifier/EmailAddress
+              - arn:aws:dataprotection::aws:data-identifier/AwsSecretKey
+              - EmployeeId
+            Operation:
+              Deidentify:
+                MaskConfig: {}
+
+Outputs:
+  LogGroupName:
+    Description: Log a message containing an email address and see it masked
+    Value: !Ref ProtectedLogGroup
