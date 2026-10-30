@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an internet-facing Network Load Balancer with one Elastic IP per
+  subnet (static addresses for allow-lists) and a TLS listener that
+  terminates HTTPS and forwards plain TCP to the targets.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the target group
+
+  SubnetIdA:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet in the first Availability Zone
+
+  SubnetIdB:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet in a second Availability Zone
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for the TLS listener
+
+Resources:
+  EipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  EipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-nlb'
+      Type: network
+      Scheme: internet-facing
+      SubnetMappings:
+        - SubnetId: !Ref SubnetIdA
+          AllocationId: !GetAtt EipA.AllocationId
+        - SubnetId: !Ref SubnetIdB
+          AllocationId: !GetAtt EipB.AllocationId
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-tcp-tg'
+      Protocol: TCP
+      Port: 80
+      VpcId: !Ref VpcId
+      TargetType: instance
+
+  TlsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancer
+      Port: 443
+      Protocol: TLS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      AlpnPolicy:
+        - HTTP2Preferred
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  StaticIpA:
+    Description: Fixed address in the first subnet
+    Value: !Ref EipA
+
+  StaticIpB:
+    Description: Fixed address in the second subnet
+    Value: !Ref EipB
+
+  NlbDnsName:
+    Description: DNS name of the load balancer
+    Value: !GetAtt NetworkLoadBalancer.DNSName
