@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Turns on S3 event delivery to EventBridge and uses a rule with a key
+  prefix filter to send new uploads under uploads/ to an SQS queue.
+
+Resources:
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  UploadQueue:
+    Type: AWS::SQS::Queue
+
+  UploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-new-uploads'
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref UploadBucket
+          object:
+            key:
+              - prefix: uploads/
+      Targets:
+        - Id: UploadQueueTarget
+          Arn: !GetAtt UploadQueue.Arn
+
+  UploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref UploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt UploadQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt UploadRule.Arn
+
+Outputs:
+  BucketName:
+    Description: Upload a file under uploads/ to trigger the rule
+    Value: !Ref UploadBucket
+
+  UploadQueueUrl:
+    Description: Receives the EventBridge events
+    Value: !Ref UploadQueue
