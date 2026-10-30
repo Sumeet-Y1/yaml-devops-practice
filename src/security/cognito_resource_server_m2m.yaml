@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sets up Cognito for machine-to-machine access: a resource server that
+  defines custom scopes, an app client that uses the client credentials flow
+  with a secret, and a hosted domain that serves the token endpoint.
+
+Parameters:
+  DomainPrefix:
+    Type: String
+    Description: Globally unique lowercase prefix for the token endpoint domain
+    AllowedPattern: '[a-z0-9][a-z0-9-]{2,62}'
+
+  ResourceServerIdentifier:
+    Type: String
+    Default: https://api.practice.example
+    Description: Identifier of the resource server, used as the scope prefix
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-m2m'
+
+  ApiResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref UserPool
+      Identifier: !Ref ResourceServerIdentifier
+      Name: Practice API
+      Scopes:
+        - ScopeName: read
+          ScopeDescription: Read data
+        - ScopeName: write
+          ScopeDescription: Write data
+
+  MachineClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: ApiResourceServer
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: backend-service
+      GenerateSecret: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthScopes:
+        - !Sub '${ResourceServerIdentifier}/read'
+
+  TokenDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Ref DomainPrefix
+
+Outputs:
+  TokenEndpoint:
+    Description: POST here with the client ID and secret to get an access token
+    Value: !Sub 'https://${DomainPrefix}.auth.${AWS::Region}.amazoncognito.com/oauth2/token'
+
+  ClientId:
+    Description: ID of the machine client
+    Value: !Ref MachineClient
