@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Streams every item change in a DynamoDB table to a Kinesis data stream
+  using the table's Kinesis streaming destination.
+
+Resources:
+  ChangeStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub '${AWS::StackName}-changes'
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+      KinesisStreamSpecification:
+        StreamArn: !GetAtt ChangeStream.Arn
+        ApproximateCreationDateTimePrecision: MILLISECOND
+
+Outputs:
+  TableName:
+    Description: Write items here
+    Value: !Ref OrdersTable
+
+  StreamName:
+    Description: Item changes appear on this stream
+    Value: !Ref ChangeStream
