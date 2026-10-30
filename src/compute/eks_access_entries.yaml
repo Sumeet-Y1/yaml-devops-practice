@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Grants IAM roles access to an existing EKS cluster with access entries
+  and AWS managed access policies: a viewer scoped to chosen namespaces and
+  an administrator for the whole cluster, with no aws-auth ConfigMap edits.
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the existing EKS cluster (authentication mode must allow access entries)
+
+  ViewerRoleArn:
+    Type: String
+    Description: ARN of the IAM role that gets read-only access
+
+  AdminRoleArn:
+    Type: String
+    Description: ARN of the IAM role that gets cluster admin access
+
+  ViewerNamespaces:
+    Type: CommaDelimitedList
+    Default: default
+    Description: Namespaces the viewer can read
+
+Resources:
+  ViewerAccessEntry:
+    Type: AWS::EKS::AccessEntry
+    Properties:
+      ClusterName: !Ref ClusterName
+      PrincipalArn: !Ref ViewerRoleArn
+      Type: STANDARD
+      AccessPolicies:
+        - PolicyArn: arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy
+          AccessScope:
+            Type: namespace
+            Namespaces: !Ref ViewerNamespaces
+
+  AdminAccessEntry:
+    Type: AWS::EKS::AccessEntry
+    Properties:
+      ClusterName: !Ref ClusterName
+      PrincipalArn: !Ref AdminRoleArn
+      Type: STANDARD
+      AccessPolicies:
+        - PolicyArn: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+          AccessScope:
+            Type: cluster
+
+Outputs:
+  ViewerEntryArn:
+    Description: Access entry for the read-only role
+    Value: !GetAtt ViewerAccessEntry.AccessEntryArn
+
+  AdminEntryArn:
+    Description: Access entry for the admin role
+    Value: !GetAtt AdminAccessEntry.AccessEntryArn
