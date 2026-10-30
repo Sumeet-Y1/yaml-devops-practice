@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an S3 bucket encrypted with a customer managed KMS key, with S3
+  Bucket Keys turned on to cut KMS request costs, and a bucket policy that
+  denies non-TLS requests and uploads that use the wrong encryption.
+
+Resources:
+  BucketKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key for the encrypted practice bucket
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  EncryptedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt BucketKey.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  EncryptedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EncryptedBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt EncryptedBucket.Arn
+              - !Sub '${EncryptedBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Sid: DenyWrongEncryptionHeader
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${EncryptedBucket.Arn}/*'
+            Condition:
+              StringNotEqualsIfExists:
+                s3:x-amz-server-side-encryption: aws:kms
+
+Outputs:
+  BucketName:
+    Description: Name of the encrypted bucket
+    Value: !Ref EncryptedBucket
+
+  KeyArn:
+    Description: KMS key that protects the objects
+    Value: !GetAtt BucketKey.Arn
