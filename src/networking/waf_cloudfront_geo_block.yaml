@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudFront-scoped WAFv2 web ACL that blocks requests from
+  chosen countries and returns a custom 403 response body. CloudFront web
+  ACLs must be created in us-east-1.
+
+Parameters:
+  BlockedCountries:
+    Type: CommaDelimitedList
+    Default: KP,IR
+    Description: Two-letter country codes to block
+
+Rules:
+  MustBeUsEast1:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Web ACLs with CLOUDFRONT scope must be created in us-east-1
+
+Resources:
+  GeoBlockAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-geo-block'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      CustomResponseBodies:
+        GeoBlocked:
+          ContentType: TEXT_PLAIN
+          Content: This content is not available in your country.
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: GeoBlockAcl
+      Rules:
+        - Name: BlockCountries
+          Priority: 0
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 403
+                CustomResponseBodyKey: GeoBlocked
+          Statement:
+            GeoMatchStatement:
+              CountryCodes: !Ref BlockedCountries
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockCountries
+
+Outputs:
+  WebAclArn:
+    Description: Set this as WebACLId on a CloudFront distribution
+    Value: !GetAtt GeoBlockAcl.Arn
