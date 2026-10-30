@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Uses event filtering on a Lambda SQS event source mapping so the function
+  is only invoked for messages whose JSON body has type "order".
+
+Resources:
+  WorkQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+
+  OrderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 10
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              for record in event["Records"]:
+                  print("Order message:", record["body"])
+
+  FilteredMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt WorkQueue.Arn
+      FunctionName: !Ref OrderFunction
+      BatchSize: 10
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"body": {"type": ["order"]}}'
+
+Outputs:
+  QueueUrl:
+    Description: Send {"type":"order"} to invoke the function, other types are dropped
+    Value: !Ref WorkQueue
