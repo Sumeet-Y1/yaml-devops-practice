@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Launches a one-time Spot instance from a launch template and uses an
+  EventBridge rule to email you the two-minute warning when AWS is about to
+  reclaim it.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the instance
+
+  AlertEmail:
+    Type: String
+    Description: Email address that receives the interruption warning
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  SpotLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-spot-lt'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: one-time
+            InstanceInterruptionBehavior: terminate
+
+  SpotInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref SubnetId
+      LaunchTemplate:
+        LaunchTemplateId: !Ref SpotLaunchTemplate
+        Version: !GetAtt SpotLaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-spot'
+
+  InterruptionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-spot-warnings'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  InterruptionTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref InterruptionTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref InterruptionTopic
+
+  InterruptionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-spot-interruption'
+      Description: Email when AWS is about to reclaim the Spot instance
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Spot Instance Interruption Warning
+        detail:
+          instance-id:
+            - !Ref SpotInstance
+      Targets:
+        - Id: EmailTarget
+          Arn: !Ref InterruptionTopic
+
+Outputs:
+  InstanceId:
+    Description: The Spot instance
+    Value: !Ref SpotInstance
+
+  InterruptionTopicArn:
+    Description: Topic that receives the two-minute warning
+    Value: !Ref InterruptionTopic
