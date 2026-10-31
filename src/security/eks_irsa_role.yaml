@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an IAM role for service accounts (IRSA): a role that only one
+  Kubernetes service account in an EKS cluster can assume through the
+  cluster's OIDC provider, with read-only access to one S3 bucket.
+
+Parameters:
+  OidcProviderArn:
+    Type: String
+    Description: ARN of the cluster's IAM OIDC provider
+
+  OidcIssuer:
+    Type: String
+    Description: OIDC issuer without https://, for example oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+
+  Namespace:
+    Type: String
+    Default: default
+    Description: Kubernetes namespace of the service account
+
+  ServiceAccountName:
+    Type: String
+    Default: s3-reader
+    Description: Kubernetes service account allowed to assume the role
+
+  BucketName:
+    Type: String
+    Description: Name of the bucket the pods may read
+
+Resources:
+  ServiceAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Federated": "${OidcProviderArn}" },
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "${OidcIssuer}:sub": "system:serviceaccount:${Namespace}:${ServiceAccountName}",
+                  "${OidcIssuer}:aud": "sts.amazonaws.com"
+                }
+              }
+            }
+          ]
+        }
+      Policies:
+        - PolicyName: ReadOneBucket
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${BucketName}'
+                  - !Sub 'arn:aws:s3:::${BucketName}/*'
+
+Outputs:
+  RoleArn:
+    Description: Add as the eks.amazonaws.com/role-arn annotation on the service account
+    Value: !GetAtt ServiceAccountRole.Arn
