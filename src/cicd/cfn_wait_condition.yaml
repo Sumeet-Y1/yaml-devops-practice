@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Uses a WaitConditionHandle and WaitCondition so the stack waits until
+  the instance reports (with a curl call) that its setup script finished.
+  A simpler alternative to cfn-signal and CreationPolicy.
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet for the instance (it needs internet access to install nginx)
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  SetupWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SubnetId: !Ref SubnetId
+      MetadataOptions:
+        HttpTokens: required
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf install -y nginx
+          systemctl enable --now nginx
+          curl -X PUT -H 'Content-Type:' --data-binary '{"Status":"SUCCESS","Reason":"nginx installed","UniqueId":"app1","Data":"nginx-ready"}' "${SetupWaitHandle}"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-app'
+
+  SetupWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: AppInstance
+    Properties:
+      Handle: !Ref SetupWaitHandle
+      Timeout: '600'
+      Count: 1
+
+Outputs:
+  InstanceId:
+    Description: Instance whose setup the stack waited for
+    Value: !Ref AppInstance
+
+  SignalData:
+    Description: Data sent by the instance in its signal
+    Value: !GetAtt SetupWaitCondition.Data
