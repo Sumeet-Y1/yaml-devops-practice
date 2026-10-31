@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an API Gateway REST API stage with a canary release: 90 percent
+  of calls use the stable deployment and 10 percent use the canary
+  deployment, with a stage variable override to tell them apart.
+
+Resources:
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-canary-api'
+
+  VersionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !GetAtt RestApi.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: '{"version": "$stageVariables.version"}'
+      MethodResponses:
+        - StatusCode: '200'
+
+  StableDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: VersionMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: Stable deployment
+
+  CanaryDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: VersionMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: Canary deployment
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref StableDeployment
+      StageName: prod
+      Variables:
+        version: stable
+      CanarySetting:
+        DeploymentId: !Ref CanaryDeployment
+        PercentTraffic: 10
+        UseStageCache: false
+        StageVariableOverrides:
+          version: canary
+
+Outputs:
+  ApiUrl:
+    Description: Call it repeatedly, about 1 in 10 responses says canary
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/'
