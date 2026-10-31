@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Restricts which source queues may use a dead-letter queue with a
+  RedriveAllowPolicy. The source queue ARN is built with Fn::Sub from a
+  known name so the two queues do not depend on each other in a circle.
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-dlq'
+      MessageRetentionPeriod: 1209600
+      RedriveAllowPolicy:
+        redrivePermission: byQueue
+        sourceQueueArns:
+          - !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-source'
+
+  SourceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-source'
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+Outputs:
+  SourceQueueUrl:
+    Description: Queue allowed to dead-letter into the DLQ
+    Value: !Ref SourceQueue
+
+  DeadLetterQueueUrl:
+    Description: Only the named source queue may use this DLQ
+    Value: !Ref DeadLetterQueue
