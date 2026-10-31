@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an S3 gateway VPC endpoint and a bucket whose policy denies any
+  request that does not arrive through that endpoint, so the data is
+  reachable only from inside the VPC.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that gets the gateway endpoint
+
+  RouteTableIds:
+    Type: CommaDelimitedList
+    Description: Comma separated route table IDs that should use the endpoint
+
+Resources:
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds: !Ref RouteTableIds
+
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  PrivateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PrivateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyAccessOutsideTheVpcEndpoint
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt PrivateBucket.Arn
+              - !Sub '${PrivateBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref S3GatewayEndpoint
+
+Outputs:
+  BucketName:
+    Description: Reachable only through the endpoint (the console is blocked too)
+    Value: !Ref PrivateBucket
+
+  EndpointId:
+    Description: ID of the S3 gateway endpoint
+    Value: !Ref S3GatewayEndpoint
