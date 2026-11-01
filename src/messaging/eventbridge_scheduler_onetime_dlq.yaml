@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates two EventBridge Scheduler schedules that send messages to SQS: a
+  one-time schedule at a chosen date and time, and a weekday cron schedule
+  in the Asia/Kolkata time zone. Both have a retry policy and a dead-letter queue.
+
+Parameters:
+  RunAt:
+    Type: String
+    Default: '2030-01-01T09:00:00'
+    AllowedPattern: '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+    Description: One-time run date and time (YYYY-MM-DDTHH:MM:SS), interpreted in Asia/Kolkata
+
+Resources:
+  TargetQueue:
+    Type: AWS::SQS::Queue
+
+  SchedulerDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendToQueues
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource:
+                  - !GetAtt TargetQueue.Arn
+                  - !GetAtt SchedulerDlq.Arn
+
+  OneTimeSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${AWS::StackName}-one-time'
+      ScheduleExpression: !Sub 'at(${RunAt})'
+      ScheduleExpressionTimezone: Asia/Kolkata
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      State: ENABLED
+      Target:
+        Arn: !GetAtt TargetQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"job": "one-time-report"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 3
+          MaximumEventAgeInSeconds: 3600
+        DeadLetterConfig:
+          Arn: !GetAtt SchedulerDlq.Arn
+
+  WeekdaySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${AWS::StackName}-weekday-9am'
+      ScheduleExpression: cron(0 9 ? * MON-FRI *)
+      ScheduleExpressionTimezone: Asia/Kolkata
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 15
+      State: ENABLED
+      Target:
+        Arn: !GetAtt TargetQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"job": "weekday-summary"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+        DeadLetterConfig:
+          Arn: !GetAtt SchedulerDlq.Arn
+
+Outputs:
+  TargetQueueUrl:
+    Description: Scheduled messages arrive here
+    Value: !Ref TargetQueue
+
+  DeadLetterQueueUrl:
+    Description: Messages that could not be delivered end up here
+    Value: !Ref SchedulerDlq
