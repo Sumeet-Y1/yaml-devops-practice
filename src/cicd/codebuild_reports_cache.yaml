@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CodeBuild project with an S3 cache and a test report group
+  that exports JUnit results to S3. The inline buildspec writes a tiny
+  JUnit file so the report shows up after a build.
+
+Resources:
+  BuildBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BuildAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                Resource:
+                  - !GetAtt BuildBucket.Arn
+                  - !Sub '${BuildBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                Resource: !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/*'
+
+  TestReportGroup:
+    Type: AWS::CodeBuild::ReportGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-unit-tests'
+      Type: TEST
+      ExportConfig:
+        ExportConfigType: S3
+        S3Destination:
+          Bucket: !Ref BuildBucket
+          Path: reports
+          Packaging: ZIP
+
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-build'
+      ServiceRole: !GetAtt BuildRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Cache:
+        Type: S3
+        Location: !Sub '${BuildBucket}/cache'
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo Running practice tests
+                - echo '<testsuite name="demo" tests="1"><testcase name="passes" classname="demo"/></testsuite>' > results.xml
+          reports:
+            ${TestReportGroup.Arn}:
+              files:
+                - results.xml
+              file-format: JUNITXML
+
+Outputs:
+  ProjectName:
+    Description: Start a build to produce a test report
+    Value: !Ref BuildProject
+
+  ReportBucketName:
+    Description: Cache and exported reports are stored here
+    Value: !Ref BuildBucket
