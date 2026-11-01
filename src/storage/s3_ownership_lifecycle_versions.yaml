@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a versioned S3 bucket with ACLs disabled (BucketOwnerEnforced),
+  a lifecycle rule that keeps only the newest noncurrent versions, moves
+  current objects to Infrequent Access, and aborts stale multipart uploads.
+
+Resources:
+  ManagedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: tier-and-clean-versions
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+              NewerNoncurrentVersions: 3
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+Outputs:
+  BucketName:
+    Description: ACLs are disabled, access is controlled by policies only
+    Value: !Ref ManagedBucket
+
+  BucketArn:
+    Description: ARN of the bucket
+    Value: !GetAtt ManagedBucket.Arn
