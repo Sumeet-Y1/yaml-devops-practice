@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Hardens a Lambda function: reserved concurrency to cap its scaling,
+  environment variables encrypted with a customer managed KMS key, active
+  X-Ray tracing, and an SQS dead-letter queue for failed async invocations.
+
+Resources:
+  EnvKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Encrypts Lambda environment variables
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  FailureQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: KeyAndQueueAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !GetAtt EnvKey.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt FailureQueue.Arn
+
+  HardenedFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 15
+      Role: !GetAtt FunctionRole.Arn
+      ReservedConcurrentExecutions: 5
+      KmsKeyArn: !GetAtt EnvKey.Arn
+      TracingConfig:
+        Mode: Active
+      DeadLetterConfig:
+        TargetArn: !GetAtt FailureQueue.Arn
+      Environment:
+        Variables:
+          API_TOKEN: practice-secret-value
+      Code:
+        ZipFile: |
+          import os
+
+          def handler(event, context):
+              return {"token_length": len(os.environ["API_TOKEN"])}
+
+Outputs:
+  FunctionName:
+    Description: At most 5 copies of this function run at once
+    Value: !Ref HardenedFunction
+
+  FailureQueueUrl:
+    Description: Failed async invocations land here
+    Value: !Ref FailureQueue
