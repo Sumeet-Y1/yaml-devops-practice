@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Runs a Lambda function inside a VPC and lets it reach DynamoDB privately
+  through a gateway VPC endpoint, so no NAT gateway or internet access is needed.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the function
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for the function
+
+  RouteTableIds:
+    Type: CommaDelimitedList
+    Description: Comma separated route table IDs of those subnets
+
+Resources:
+  FunctionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lambda function security group, outbound only
+      VpcId: !Ref VpcId
+
+  DynamoDbEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'
+      RouteTableIds: !Ref RouteTableIds
+
+  NotesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: noteId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: noteId
+          KeyType: HASH
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: NotesTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt NotesTable.Arn
+
+  NoteFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: DynamoDbEndpoint
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 15
+      Role: !GetAtt FunctionRole.Arn
+      VpcConfig:
+        SubnetIds: !Ref SubnetIds
+        SecurityGroupIds:
+          - !Ref FunctionSecurityGroup
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref NotesTable
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+
+          table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
+
+          def handler(event, context):
+              table.put_item(Item={"noteId": event.get("id", "1"), "text": event.get("text", "hello")})
+              return {"saved": True}
+
+Outputs:
+  FunctionName:
+    Description: Invoke with {"id": "1", "text": "hi"} and check the table
+    Value: !Ref NoteFunction
+
+  TableName:
+    Description: Table reached through the gateway endpoint
+    Value: !Ref NotesTable
