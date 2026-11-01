@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an SNS topic encrypted with a customer managed KMS key (with
+  permissions so CloudWatch alarms and EventBridge can still publish) and a
+  topic policy that denies any publish that does not use HTTPS.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address subscribed to the topic
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+
+Resources:
+  TopicKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Encrypts messages in the practice SNS topic
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowAwsServicesToPublish
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+                - events.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: '*'
+
+  SecureTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-secure'
+      KmsMasterKeyId: !Ref TopicKey
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  SecureTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref SecureTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowOwnerAccount
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - sns:Publish
+              - sns:Subscribe
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+            Resource: !Ref SecureTopic
+            Condition:
+              StringEquals:
+                AWS:SourceOwner: !Ref AWS::AccountId
+          - Sid: AllowEventsAndAlarms
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+                - events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref SecureTopic
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: sns:Publish
+            Resource: !Ref SecureTopic
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+Outputs:
+  TopicArn:
+    Description: Encrypted topic that only accepts HTTPS publishes
+    Value: !Ref SecureTopic
+
+  KeyArn:
+    Description: KMS key protecting the messages
+    Value: !GetAtt TopicKey.Arn
