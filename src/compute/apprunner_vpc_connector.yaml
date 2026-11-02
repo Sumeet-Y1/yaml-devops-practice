@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys an App Runner service whose outbound traffic goes through a VPC
+  connector, so the app can reach private resources (such as a database)
+  inside your VPC.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the VPC connector
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group attached to the connector
+
+Resources:
+  VpcConnector:
+    Type: AWS::AppRunner::VpcConnector
+    Properties:
+      VpcConnectorName: !Sub '${AWS::StackName}-connector'
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref SecurityGroupId
+
+  AppService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-service'
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: public.ecr.aws/aws-containers/hello-app-runner:latest
+          ImageRepositoryType: ECR_PUBLIC
+          ImageConfiguration:
+            Port: '8000'
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !Ref VpcConnector
+        IngressConfiguration:
+          IsPubliclyAccessible: true
+
+Outputs:
+  ServiceUrl:
+    Description: Public URL, outbound traffic leaves through the VPC
+    Value: !Sub 'https://${AppService.ServiceUrl}'
+
+  VpcConnectorArn:
+    Description: ARN of the VPC connector
+    Value: !Ref VpcConnector
