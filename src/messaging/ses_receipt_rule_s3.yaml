@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Receives email with Amazon SES: a receipt rule set with one rule that
+  scans for spam and viruses, requires TLS, and saves messages for a domain
+  into an S3 bucket. SES inbound mail is only available in some regions.
+
+Parameters:
+  RecipientDomain:
+    Type: String
+    Default: example.com
+    Description: Domain whose incoming mail is stored
+
+Resources:
+  MailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  MailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSesToWrite
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${MailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                aws:Referer: !Ref AWS::AccountId
+
+  ReceiptRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: !Sub '${AWS::StackName}-rules'
+
+  SaveMailRule:
+    Type: AWS::SES::ReceiptRule
+    DependsOn: MailBucketPolicy
+    Properties:
+      RuleSetName: !Ref ReceiptRuleSet
+      Rule:
+        Name: save-to-s3
+        Enabled: true
+        ScanEnabled: true
+        TlsPolicy: Require
+        Recipients:
+          - !Ref RecipientDomain
+        Actions:
+          - S3Action:
+              BucketName: !Ref MailBucket
+              ObjectKeyPrefix: inbox/
+
+Outputs:
+  MailBucketName:
+    Description: Incoming messages are saved under inbox/
+    Value: !Ref MailBucket
+
+  RuleSetName:
+    Description: Activate it in SES (only one rule set can be active), and point your MX record at SES
+    Value: !Ref ReceiptRuleSet
