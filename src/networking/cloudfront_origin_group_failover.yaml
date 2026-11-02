@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudFront distribution with an origin group: requests go to
+  the primary origin, and CloudFront retries on the secondary origin when
+  the primary returns a 5xx error.
+
+Parameters:
+  PrimaryOriginDomain:
+    Type: String
+    Default: primary.example.com
+    Description: Domain name of the primary HTTPS origin
+
+  SecondaryOriginDomain:
+    Type: String
+    Default: secondary.example.com
+    Description: Domain name of the failover HTTPS origin
+
+Resources:
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Distribution with origin failover
+        Origins:
+          - Id: primary
+            DomainName: !Ref PrimaryOriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+          - Id: secondary
+            DomainName: !Ref SecondaryOriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        OriginGroups:
+          Quantity: 1
+          Items:
+            - Id: failover-group
+              FailoverCriteria:
+                StatusCodes:
+                  Quantity: 4
+                  Items:
+                    - 500
+                    - 502
+                    - 503
+                    - 504
+              Members:
+                Quantity: 2
+                Items:
+                  - OriginId: primary
+                  - OriginId: secondary
+        DefaultCacheBehavior:
+          TargetOriginId: failover-group
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+Outputs:
+  DistributionDomain:
+    Description: CloudFront domain name
+    Value: !GetAtt Distribution.DomainName
+
+  DistributionId:
+    Description: ID of the distribution
+    Value: !Ref Distribution
