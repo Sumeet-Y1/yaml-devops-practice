@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Enables Lambda SnapStart for a Java function to cut cold start time. The
+  function snapshot is taken when a version is published, so the template
+  also creates a version and an alias that points to it.
+
+Parameters:
+  CodeBucket:
+    Type: String
+    Description: S3 bucket that holds the Java deployment package (JAR or ZIP)
+
+  CodeKey:
+    Type: String
+    Description: S3 key of the deployment package
+
+  HandlerName:
+    Type: String
+    Default: com.example.Handler::handleRequest
+    Description: Fully qualified handler method
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  JavaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: java21
+      Handler: !Ref HandlerName
+      MemorySize: 1024
+      Timeout: 30
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: !Ref CodeKey
+      SnapStart:
+        ApplyOn: PublishedVersions
+
+  FunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref JavaFunction
+
+  LiveAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref JavaFunction
+      FunctionVersion: !GetAtt FunctionVersion.Version
+      Name: live
+
+Outputs:
+  AliasArn:
+    Description: Invoke this ARN to get SnapStart behavior (plain $LATEST has no snapshot)
+    Value: !Ref LiveAlias
+
+  FunctionName:
+    Description: Name of the function
+    Value: !Ref JavaFunction
