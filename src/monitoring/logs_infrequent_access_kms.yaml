@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a CloudWatch Logs log group in the Infrequent Access class
+  (cheaper ingestion for logs you rarely query), encrypted with a customer
+  managed KMS key whose policy allows the Logs service to use it.
+
+Resources:
+  LogsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Encrypts the practice log group
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudWatchLogs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt*
+              - kms:Decrypt*
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+
+  ArchiveLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/archive'
+      LogGroupClass: INFREQUENT_ACCESS
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt LogsKey.Arn
+
+Outputs:
+  LogGroupName:
+    Description: Infrequent Access groups do not support metric filters or subscription filters
+    Value: !Ref ArchiveLogGroup
+
+  KeyArn:
+    Description: KMS key that encrypts the logs
+    Value: !GetAtt LogsKey.Arn
