@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Starts a Step Functions state machine every hour from an EventBridge
+  rule, passing a fixed JSON input. The state machine is defined as a YAML
+  object instead of a JSON string.
+
+Resources:
+  WorkflowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+
+  HourlyWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-hourly'
+      RoleArn: !GetAtt WorkflowRole.Arn
+      Definition:
+        Comment: Simple workflow started on a schedule
+        StartAt: Greet
+        States:
+          Greet:
+            Type: Pass
+            Result: hello from the scheduled workflow
+            Next: Done
+          Done:
+            Type: Succeed
+
+  EventsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !Ref HourlyWorkflow
+
+  HourlyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-hourly'
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Id: StartWorkflow
+          Arn: !Ref HourlyWorkflow
+          RoleArn: !GetAtt EventsRole.Arn
+          Input: '{"source": "schedule"}'
+
+Outputs:
+  StateMachineArn:
+    Description: Workflow started every hour
+    Value: !Ref HourlyWorkflow
+
+  RuleName:
+    Description: Schedule rule
+    Value: !Ref HourlyRule
