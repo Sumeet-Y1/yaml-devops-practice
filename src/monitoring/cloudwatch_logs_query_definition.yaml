@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Log group with saved CloudWatch Logs Insights query definitions
+
+Resources:
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/app'
+      RetentionInDays: 14
+
+  RecentErrorsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub '${AWS::StackName}/recent-errors'
+      QueryString: |
+        fields @timestamp, @message
+        | filter @message like /ERROR/
+        | sort @timestamp desc
+        | limit 50
+      LogGroupNames:
+        - !Ref AppLogGroup
+
+  ErrorsPerFiveMinutesQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub '${AWS::StackName}/errors-per-5m'
+      QueryString: |
+        filter @message like /ERROR/
+        | stats count(*) as errorCount by bin(5m)
+        | sort errorCount desc
+      LogGroupNames:
+        - !Ref AppLogGroup
+
+Outputs:
+  LogGroupName:
+    Description: Name of the log group
+    Value: !Ref AppLogGroup
+  RecentErrorsQueryId:
+    Description: ID of the recent errors query definition
+    Value: !Ref RecentErrorsQuery
