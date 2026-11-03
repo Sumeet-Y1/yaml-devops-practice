@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Mappings and Conditions used to change resources per environment
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+Mappings:
+  EnvironmentSettings:
+    dev:
+      LogRetentionDays: 7
+      Versioning: Suspended
+    prod:
+      LogRetentionDays: 90
+      Versioning: Enabled
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+
+Resources:
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !FindInMap [EnvironmentSettings, !Ref Environment, LogRetentionDays]
+
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: !FindInMap [EnvironmentSettings, !Ref Environment, Versioning]
+      Tags:
+        - Key: Tier
+          Value: !If [IsProd, critical, standard]
+
+  ProdAlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: IsProd
+    Properties:
+      DisplayName: Production alerts
+
+Outputs:
+  LogGroupName:
+    Description: Name of the application log group
+    Value: !Ref AppLogGroup
+  AlertTopicArn:
+    Condition: IsProd
+    Description: Alert topic (prod only)
+    Value: !Ref ProdAlertTopic
