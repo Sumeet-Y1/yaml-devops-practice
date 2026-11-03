@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS MySQL 8.4 parameter group with slow query logging plus a DB subnet group
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones
+
+Resources:
+  MySqlParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: MySQL 8.4 parameters with slow query logging enabled
+      Family: mysql8.4
+      Parameters:
+        slow_query_log: '1'
+        long_query_time: '2'
+        general_log: '0'
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets where the database may be placed
+      SubnetIds: !Ref SubnetIds
+
+Outputs:
+  ParameterGroupName:
+    Description: Name of the DB parameter group
+    Value: !Ref MySqlParameterGroup
+  SubnetGroupName:
+    Description: Name of the DB subnet group
+    Value: !Ref DbSubnetGroup
