@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket with a daily inventory report delivered to a separate destination bucket
+
+Resources:
+  InventoryDestinationBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'inventory-dest-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  InventoryDestinationPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref InventoryDestinationBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowInventoryDelivery
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${InventoryDestinationBucket.Arn}/*'
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::inventory-source-${AWS::AccountId}-${AWS::Region}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: InventoryDestinationPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'inventory-source-${AWS::AccountId}-${AWS::Region}'
+      InventoryConfigurations:
+        - Id: DailyCurrentObjects
+          Enabled: true
+          IncludedObjectVersions: Current
+          ScheduleFrequency: Daily
+          OptionalFields:
+            - Size
+            - LastModifiedDate
+          Destination:
+            BucketArn: !GetAtt InventoryDestinationBucket.Arn
+            Format: CSV
+            Prefix: inventory
+
+Outputs:
+  SourceBucketName:
+    Description: Bucket being inventoried
+    Value: !Ref SourceBucket
+  DestinationBucketArn:
+    Description: Bucket receiving the inventory reports
+    Value: !GetAtt InventoryDestinationBucket.Arn
