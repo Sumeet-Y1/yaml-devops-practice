@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Custom EventBridge event bus with an archive so events can be replayed later
+
+Parameters:
+  RetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 0
+    Description: Days to keep archived events (0 means forever)
+
+Resources:
+  AppEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-app-bus'
+
+  AppEventArchive:
+    Type: AWS::Events::Archive
+    Properties:
+      ArchiveName: !Sub '${AWS::StackName}-app-archive'
+      Description: Archive of events sent by my.app
+      SourceArn: !GetAtt AppEventBus.Arn
+      RetentionDays: !Ref RetentionDays
+      EventPattern:
+        source:
+          - my.app
+
+Outputs:
+  EventBusName:
+    Description: Name of the custom event bus
+    Value: !Ref AppEventBus
+  ArchiveName:
+    Description: Name of the event archive
+    Value: !Ref AppEventArchive
