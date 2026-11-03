@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Provisioned DynamoDB table with target tracking auto scaling for reads and writes
+
+Resources:
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-orders'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: OrderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: OrderId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  ReadScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: dynamodb
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ResourceId: !Sub 'table/${OrdersTable}'
+      MinCapacity: 5
+      MaxCapacity: 50
+
+  ReadScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-read-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ReadScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+
+  WriteScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: dynamodb
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ResourceId: !Sub 'table/${OrdersTable}'
+      MinCapacity: 5
+      MaxCapacity: 50
+
+  WriteScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-write-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WriteScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+
+Outputs:
+  TableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref OrdersTable
