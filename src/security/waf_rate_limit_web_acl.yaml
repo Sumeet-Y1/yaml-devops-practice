@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Regional WAFv2 web ACL with a rate-based rule that blocks IPs sending too many requests
+
+Parameters:
+  RequestLimit:
+    Type: Number
+    Default: 1000
+    MinValue: 10
+    Description: Max requests per 5 minutes from one IP before blocking
+
+Resources:
+  RateLimitWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-rate-limit'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${AWS::StackName}-web-acl'
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: RateLimitPerIp
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: !Ref RequestLimit
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${AWS::StackName}-rate-limit-rule'
+            SampledRequestsEnabled: true
+
+Outputs:
+  WebAclArn:
+    Description: ARN of the web ACL
+    Value: !GetAtt RateLimitWebAcl.Arn
