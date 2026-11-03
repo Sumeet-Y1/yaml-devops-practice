@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC gateway endpoint for S3 with a restrictive endpoint policy
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that gets the endpoint
+  RouteTableIds:
+    Type: CommaDelimitedList
+    Description: Route table IDs that should route S3 traffic through the endpoint
+
+Resources:
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds: !Ref RouteTableIds
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource: '*'
+
+Outputs:
+  EndpointId:
+    Description: ID of the S3 gateway endpoint
+    Value: !Ref S3GatewayEndpoint
