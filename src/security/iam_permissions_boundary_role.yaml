@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM role capped by a permissions boundary so effective access is the intersection of both policies
+
+Resources:
+  BoundaryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Boundary allowing S3 read and logging only, and denying all IAM actions
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowS3ReadAndLogs
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+          - Sid: DenyIamActions
+            Effect: Deny
+            Action: iam:*
+            Resource: '*'
+
+  BoundedLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      PermissionsBoundary: !Ref BoundaryPolicy
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+Outputs:
+  RoleArn:
+    Description: ARN of the bounded role
+    Value: !GetAtt BoundedLambdaRole.Arn
+  BoundaryPolicyArn:
+    Description: ARN of the permissions boundary policy
+    Value: !Ref BoundaryPolicy
