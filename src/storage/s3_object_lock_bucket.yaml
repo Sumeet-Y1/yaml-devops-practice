@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket with Object Lock and a default governance retention period
+
+Parameters:
+  RetentionDays:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Default retention period in days for new objects
+
+Resources:
+  LockedBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'object-lock-${AWS::AccountId}-${AWS::Region}'
+      ObjectLockEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: !Ref RetentionDays
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  BucketName:
+    Description: Name of the Object Lock bucket
+    Value: !Ref LockedBucket
