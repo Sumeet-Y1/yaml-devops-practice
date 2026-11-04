@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 HTTPS health check that probes a domain path from multiple regions
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name to monitor
+  HealthPath:
+    Type: String
+    Default: /health
+    Description: Path that returns a 2xx or 3xx status when healthy
+
+Resources:
+  WebsiteHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTPS
+        FullyQualifiedDomainName: !Ref DomainName
+        Port: 443
+        ResourcePath: !Ref HealthPath
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: website-health-check
+
+Outputs:
+  HealthCheckId:
+    Description: ID of the health check
+    Value: !Ref WebsiteHealthCheck
