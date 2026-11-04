@@ -1,7 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates a Lambda function with a public function URL, CORS settings,
-  and the resource policy that allows unauthenticated invocation.
+Description: Lambda function with an IAM-authenticated function URL
 
 Resources:
   FunctionRole:
@@ -17,7 +15,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  UrlFunction:
+  HelloFunction:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.12
@@ -26,28 +24,15 @@ Resources:
       Code:
         ZipFile: |
           def handler(event, context):
-              return {"statusCode": 200, "body": "Hello from a Lambda function URL"}
+              return {"statusCode": 200, "body": "hello from a function url"}
 
-  FunctionUrl:
+  HelloFunctionUrl:
     Type: AWS::Lambda::Url
     Properties:
-      TargetFunctionArn: !GetAtt UrlFunction.Arn
-      AuthType: NONE
-      Cors:
-        AllowOrigins:
-          - '*'
-        AllowMethods:
-          - GET
-
-  PublicInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref UrlFunction
-      Action: lambda:InvokeFunctionUrl
-      Principal: '*'
-      FunctionUrlAuthType: NONE
+      TargetFunctionArn: !GetAtt HelloFunction.Arn
+      AuthType: AWS_IAM
 
 Outputs:
   FunctionUrl:
-    Description: Public HTTPS URL of the function
-    Value: !GetAtt FunctionUrl.FunctionUrl
+    Description: HTTPS endpoint for the function (callers must sign requests with SigV4)
+    Value: !GetAtt HelloFunctionUrl.FunctionUrl
