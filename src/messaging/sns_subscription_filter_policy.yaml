@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS topic with an SQS subscription that uses a filter policy so only matching messages are delivered
+
+Resources:
+  EventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Order events
+
+  CreatedOrdersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 86400
+
+  CreatedOrdersQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref CreatedOrdersQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt CreatedOrdersQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref EventsTopic
+
+  CreatedOrdersSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt CreatedOrdersQueue.Arn
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        eventType:
+          - order_created
+
+Outputs:
+  TopicArn:
+    Description: ARN of the topic
+    Value: !Ref EventsTopic
+  QueueUrl:
+    Description: URL of the filtered queue
+    Value: !Ref CreatedOrdersQueue
