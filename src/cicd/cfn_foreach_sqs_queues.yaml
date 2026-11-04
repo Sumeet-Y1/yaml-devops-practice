@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::LanguageExtensions
+Description: Fn::ForEach loop that creates one SQS queue per name in a list
+
+Resources:
+  Fn::ForEach::Queues:
+    - QueueName
+    - - orders
+      - payments
+      - shipping
+    - ${QueueName}Queue:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: !Sub '${AWS::StackName}-${QueueName}'
+          MessageRetentionPeriod: 86400
+
+Outputs:
+  QueueNamePrefix:
+    Description: Prefix shared by every queue created by the loop
+    Value: !Sub '${AWS::StackName}-'
