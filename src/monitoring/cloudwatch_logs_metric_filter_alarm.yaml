@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Metric filter that counts ERROR log lines and an alarm that fires when the count is high
+
+Resources:
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  ErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AppLogGroup
+      FilterPattern: '"ERROR"'
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: Practice/App
+          MetricName: ErrorCount
+          DefaultValue: 0
+
+  ErrorCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Five or more ERROR lines in five minutes
+      Namespace: Practice/App
+      MetricName: ErrorCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  LogGroupName:
+    Description: Log group being filtered
+    Value: !Ref AppLogGroup
+  AlarmName:
+    Description: Name of the error count alarm
+    Value: !Ref ErrorCountAlarm
