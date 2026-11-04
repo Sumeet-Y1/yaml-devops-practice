@@ -1,17 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an Amazon Cognito user pool with a password policy, an app client,
-  a hosted UI domain, and an admins group.
-
-Parameters:
-  DomainPrefix:
-    Type: String
-    Description: Globally unique lowercase prefix for the hosted UI domain (avoid the words aws, amazon, cognito)
-    AllowedPattern: '[a-z0-9][a-z0-9-]{2,62}'
+Description: Cognito user pool with email sign-in, a strong password policy, and an app client
 
 Resources:
-  UserPool:
+  AppUserPool:
     Type: AWS::Cognito::UserPool
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       UserPoolName: !Sub '${AWS::StackName}-users'
       UsernameAttributes:
@@ -21,45 +15,30 @@ Resources:
       MfaConfiguration: 'OFF'
       Policies:
         PasswordPolicy:
-          MinimumLength: 8
+          MinimumLength: 12
           RequireLowercase: true
           RequireUppercase: true
           RequireNumbers: true
-          RequireSymbols: false
+          RequireSymbols: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
 
-  UserPoolClient:
+  AppUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      UserPoolId: !Ref UserPool
-      ClientName: web-app
+      UserPoolId: !Ref AppUserPool
+      ClientName: web-app-client
       GenerateSecret: false
-      PreventUserExistenceErrors: ENABLED
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
 
-  UserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties:
-      UserPoolId: !Ref UserPool
-      Domain: !Ref DomainPrefix
-
-  AdminsGroup:
-    Type: AWS::Cognito::UserPoolGroup
-    Properties:
-      UserPoolId: !Ref UserPool
-      GroupName: admins
-      Description: Administrators
-
 Outputs:
   UserPoolId:
-    Description: Cognito user pool ID
-    Value: !Ref UserPool
-
+    Description: ID of the user pool
+    Value: !Ref AppUserPool
   UserPoolClientId:
-    Description: App client ID
-    Value: !Ref UserPoolClient
-
-  HostedUiDomain:
-    Description: Hosted UI base URL
-    Value: !Sub 'https://${DomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+    Description: ID of the app client
+    Value: !Ref AppUserPoolClient
