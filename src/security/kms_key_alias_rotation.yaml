@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Customer managed KMS key with automatic rotation, an account-level key policy, and a friendly alias
+
+Resources:
+  AppKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: Key for encrypting application data
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableAccountPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+
+  AppKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-key'
+      TargetKeyId: !Ref AppKey
+
+Outputs:
+  KeyArn:
+    Description: ARN of the KMS key
+    Value: !GetAtt AppKey.Arn
+  KeyAliasName:
+    Description: Alias of the KMS key
+    Value: !Ref AppKeyAlias
