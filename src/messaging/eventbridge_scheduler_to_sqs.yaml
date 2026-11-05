@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge Scheduler schedule that sends a message to an SQS queue every hour
+
+Resources:
+  TickQueue:
+    Type: AWS::SQS::Queue
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendToTickQueue
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt TickQueue.Arn
+
+  HourlySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${AWS::StackName}-hourly'
+      Description: Sends a tick message every hour
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !GetAtt TickQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"message": "hourly tick"}'
+
+Outputs:
+  ScheduleName:
+    Description: Name of the schedule
+    Value: !Ref HourlySchedule
+  QueueUrl:
+    Description: Queue that receives the tick messages
+    Value: !Ref TickQueue
