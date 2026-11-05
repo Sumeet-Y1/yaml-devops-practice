@@ -1,0 +1,13 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS topic whose display name is pulled from an SSM parameter at deploy time using a dynamic reference
+
+Resources:
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: '{{resolve:ssm:/practice/app/display-name}}'
+
+Outputs:
+  TopicArn:
+    Description: ARN of the topic
+    Value: !Ref NotificationTopic
