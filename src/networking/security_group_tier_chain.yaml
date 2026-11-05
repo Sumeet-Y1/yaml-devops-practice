@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Three-tier security groups where each tier only accepts traffic from the tier in front of it
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the security groups
+
+Resources:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web tier allows HTTPS from anywhere
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App tier allows traffic only from the web tier
+      VpcId: !Ref VpcId
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database tier allows traffic only from the app tier
+      VpcId: !Ref VpcId
+
+  AppFromWebIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !Ref WebSecurityGroup
+
+  DbFromAppIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+
+Outputs:
+  WebSecurityGroupId:
+    Description: ID of the web tier group
+    Value: !Ref WebSecurityGroup
+  AppSecurityGroupId:
+    Description: ID of the app tier group
+    Value: !Ref AppSecurityGroup
+  DbSecurityGroupId:
+    Description: ID of the database tier group
+    Value: !Ref DbSecurityGroup
