@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 launch template that requires IMDSv2 session tokens and uses the latest Amazon Linux 2023 AMI
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Instance type for launched instances
+
+Resources:
+  HardenedLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-imdsv2'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+          HttpPutResponseHopLimit: 1
+        Monitoring:
+          Enabled: true
+
+Outputs:
+  LaunchTemplateId:
+    Description: ID of the launch template
+    Value: !Ref HardenedLaunchTemplate
+  LatestVersion:
+    Description: Latest version number of the launch template
+    Value: !Sub '${HardenedLaunchTemplate.LatestVersionNumber}'
