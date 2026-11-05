@@ -1,23 +1,50 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  CloudWatch Dashboard - practice template
+Description: CloudWatch dashboard with Lambda invocation and error widgets for one function
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: my-function
+    Description: Lambda function to chart
 
 Resources:
-  PracticeDashboard:
+  OverviewDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: practice-dashboard
+      DashboardName: !Sub '${AWS::StackName}-overview'
       DashboardBody: !Sub |
         {
           "widgets": [
             {
-              "type": "text",
+              "type": "metric",
               "x": 0,
               "y": 0,
-              "width": 6,
-              "height": 3,
+              "width": 12,
+              "height": 6,
               "properties": {
-                "markdown": "## Practice Dashboard\nMonitoring key metrics"
+                "title": "Invocations",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${FunctionName}"]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Errors",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${FunctionName}"]
+                ]
               }
             }
           ]
@@ -25,4 +52,5 @@ Resources:
 
 Outputs:
   DashboardName:
-    Value: !Ref PracticeDashboard
+    Description: Name of the dashboard
+    Value: !Ref OverviewDashboard
