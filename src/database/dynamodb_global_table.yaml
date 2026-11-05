@@ -1,44 +1,31 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates a DynamoDB global table that replicates across two regions with
-  on-demand billing, streams, point-in-time recovery, and a TTL attribute.
-
-Parameters:
-  ReplicaRegion:
-    Type: String
-    Default: us-west-2
-    Description: Second region (must differ from the region you deploy in)
+Description: DynamoDB global table (version 2019.11.21) starting with one replica, ready to add more Regions
 
 Resources:
-  SessionsTable:
+  SessionsGlobalTable:
     Type: AWS::DynamoDB::GlobalTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       TableName: !Sub '${AWS::StackName}-sessions'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: sessionId
+        - AttributeName: SessionId
           AttributeType: S
       KeySchema:
-        - AttributeName: sessionId
+        - AttributeName: SessionId
           KeyType: HASH
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
-      TimeToLiveSpecification:
-        AttributeName: expiresAt
-        Enabled: true
       Replicas:
         - Region: !Ref AWS::Region
-          PointInTimeRecoverySpecification:
-            PointInTimeRecoveryEnabled: true
-        - Region: !Ref ReplicaRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
 
 Outputs:
   TableName:
-    Description: Global table name
-    Value: !Ref SessionsTable
-
+    Description: Name of the global table
+    Value: !Ref SessionsGlobalTable
   TableArn:
-    Description: ARN of the local replica
-    Value: !GetAtt SessionsTable.Arn
+    Description: ARN of the global table
+    Value: !GetAtt SessionsGlobalTable.Arn
