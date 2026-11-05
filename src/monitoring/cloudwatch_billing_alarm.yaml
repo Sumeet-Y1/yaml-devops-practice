@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Estimated charges billing alarm with an email notification, locked to us-east-1 where billing metrics live
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives the billing alert
+  ThresholdUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Alert when estimated monthly charges exceed this many USD
+
+Rules:
+  RequireUsEast1:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Billing metrics are only published in us-east-1
+
+Resources:
+  BillingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Billing alerts
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  EstimatedChargesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Estimated charges are above the threshold
+      Namespace: AWS/Billing
+      MetricName: EstimatedCharges
+      Dimensions:
+        - Name: Currency
+          Value: USD
+      Statistic: Maximum
+      Period: 21600
+      EvaluationPeriods: 1
+      Threshold: !Ref ThresholdUsd
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref BillingTopic
+
+Outputs:
+  TopicArn:
+    Description: ARN of the billing alert topic
+    Value: !Ref BillingTopic
+  AlarmName:
+    Description: Name of the billing alarm
+    Value: !Ref EstimatedChargesAlarm
