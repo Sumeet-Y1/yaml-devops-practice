@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket that sends a message to an SQS queue whenever a .csv object is created
+
+Resources:
+  UploadQueue:
+    Type: AWS::SQS::Queue
+
+  UploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref UploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt UploadQueue.Arn
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::notify-${AWS::AccountId}-${AWS::Region}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: UploadQueuePolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'notify-${AWS::AccountId}-${AWS::Region}'
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt UploadQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .csv
+
+Outputs:
+  BucketName:
+    Description: Bucket that emits notifications
+    Value: !Ref UploadBucket
+  QueueArn:
+    Description: Queue that receives notifications
+    Value: !GetAtt UploadQueue.Arn
