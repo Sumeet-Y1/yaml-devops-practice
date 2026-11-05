@@ -1,16 +1,33 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: Create AWS Lambda Layer
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda layer published from a zip file in S3 so shared code can be reused across functions
+
+Parameters:
+  LayerBucket:
+    Type: String
+    Description: S3 bucket that holds the layer zip
+  LayerKey:
+    Type: String
+    Description: S3 key of the layer zip file
 
 Resources:
-  DemoLambdaLayer:
+  SharedLibsLayer:
     Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      LayerName: demo-lambda-layer
-      Description: Demo layer for GitHub streak
-      CompatibleRuntimes:
-        - python3.9
-        - nodejs18.x
+      LayerName: !Sub '${AWS::StackName}-shared-libs'
+      Description: Shared helper libraries
       Content:
-        S3Bucket: demo-layer-bucket
-        S3Key: layer-code.zip
+        S3Bucket: !Ref LayerBucket
+        S3Key: !Ref LayerKey
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - x86_64
+        - arm64
       LicenseInfo: MIT
+
+Outputs:
+  LayerVersionArn:
+    Description: ARN of the layer version to attach to functions
+    Value: !Ref SharedLibsLayer
