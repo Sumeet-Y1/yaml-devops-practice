@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurora PostgreSQL Serverless v2 cluster with a managed master password in Secrets Manager
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones
+
+Resources:
+  AuroraSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the Aurora cluster
+      SubnetIds: !Ref SubnetIds
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '16.4'
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      StorageEncrypted: true
+      DBSubnetGroupName: !Ref AuroraSubnetGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 2
+
+  AuroraInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless
+
+Outputs:
+  ClusterEndpoint:
+    Description: Writer endpoint of the cluster
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+  MasterSecretArn:
+    Description: Secret that holds the generated master password
+    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
