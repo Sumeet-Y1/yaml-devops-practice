@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS PostgreSQL instance with Performance Insights, CloudWatch log exports, and a managed master password
+
+Resources:
+  PostgresInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Engine: postgres
+      EngineVersion: '16.4'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      BackupRetentionPeriod: 1
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      EnableCloudwatchLogsExports:
+        - postgresql
+        - upgrade
+
+Outputs:
+  DbEndpoint:
+    Description: Endpoint address of the instance
+    Value: !GetAtt PostgresInstance.Endpoint.Address
+  MasterSecretArn:
+    Description: Secret that holds the generated master password
+    Value: !GetAtt PostgresInstance.MasterUserSecret.SecretArn
