@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub Actions OIDC provider and an IAM role that only one repository can assume, with no stored access keys
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: Sumeet-Y1
+    Description: GitHub user or organization that owns the repository
+  GitHubRepo:
+    Type: String
+    Default: yaml-devops-practice
+    Description: Repository allowed to assume the role
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              StringLike:
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+Outputs:
+  RoleArn:
+    Description: Role ARN to put in the GitHub Actions workflow
+    Value: !GetAtt GitHubActionsRole.Arn
+  OidcProviderArn:
+    Description: ARN of the OIDC provider
+    Value: !Ref GitHubOidcProvider
