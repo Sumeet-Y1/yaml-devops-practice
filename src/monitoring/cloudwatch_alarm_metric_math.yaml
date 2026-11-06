@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch alarm that uses metric math to alert on a Lambda error rate percentage
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: my-function
+    Description: Lambda function to watch
+
+Resources:
+  ErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda error rate above 5 percent
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 5
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      TreatMissingData: notBreaching
+      Metrics:
+        - Id: errorRate
+          Label: Error rate percent
+          Expression: '100 * errors / MAX([errors, invocations])'
+          ReturnData: true
+        - Id: errors
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref FunctionName
+            Period: 300
+            Stat: Sum
+        - Id: invocations
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref FunctionName
+            Period: 300
+            Stat: Sum
+
+Outputs:
+  AlarmName:
+    Description: Name of the error rate alarm
+    Value: !Ref ErrorRateAlarm
