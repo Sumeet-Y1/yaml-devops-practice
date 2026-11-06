@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 weighted records that split traffic 70/30 between two endpoints
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that holds the records
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name of the hosted zone
+
+Resources:
+  BlueRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: blue
+      Weight: 70
+      ResourceRecords:
+        - 192.0.2.10
+
+  GreenRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: green
+      Weight: 30
+      ResourceRecords:
+        - 192.0.2.20
+
+Outputs:
+  BlueRecordName:
+    Description: Name of the blue record
+    Value: !Ref BlueRecord
+  GreenRecordName:
+    Description: Name of the green record
+    Value: !Ref GreenRecord
