@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: NAT gateway with an Elastic IP and a default route so private subnets can reach the internet
+
+Parameters:
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet that hosts the NAT gateway
+  PrivateRouteTableId:
+    Type: String
+    Description: Route table ID used by the private subnets
+
+Resources:
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetId
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableId
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+Outputs:
+  NatGatewayId:
+    Description: ID of the NAT gateway
+    Value: !Ref NatGateway
+  NatPublicIp:
+    Description: Public IP used for outbound traffic
+    Value: !Ref NatEip
