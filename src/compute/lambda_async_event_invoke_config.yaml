@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda asynchronous invoke settings with limited retries and an SQS destination for failed events
+
+Resources:
+  FailureQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 86400
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SendToFailureQueue
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt FailureQueue.Arn
+
+  FlakyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              raise Exception("always fails so the failure destination gets used")
+
+  AsyncInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref FlakyFunction
+      Qualifier: '$LATEST'
+      MaximumRetryAttempts: 1
+      MaximumEventAgeInSeconds: 3600
+      DestinationConfig:
+        OnFailure:
+          Destination: !GetAtt FailureQueue.Arn
+
+Outputs:
+  FunctionName:
+    Description: Name of the function
+    Value: !Ref FlakyFunction
+  FailureQueueUrl:
+    Description: Queue that receives failed async events
+    Value: !Ref FailureQueue
