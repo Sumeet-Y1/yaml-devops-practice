@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Metadata AWS::CloudFormation::Interface that groups and labels parameters in the console
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Bucket settings
+        Parameters:
+          - BucketPrefix
+          - VersioningStatus
+      - Label:
+          default: Tagging
+        Parameters:
+          - OwnerTag
+    ParameterLabels:
+      BucketPrefix:
+        default: Bucket name prefix
+      VersioningStatus:
+        default: Versioning status
+      OwnerTag:
+        default: Owner tag value
+
+Parameters:
+  BucketPrefix:
+    Type: String
+    Default: practice
+    AllowedPattern: '^[a-z0-9-]+$'
+    Description: Lowercase prefix for the bucket name
+  VersioningStatus:
+    Type: String
+    Default: Enabled
+    AllowedValues:
+      - Enabled
+      - Suspended
+    Description: Whether bucket versioning is on
+  OwnerTag:
+    Type: String
+    Default: sumeet
+    Description: Value for the Owner tag
+
+Resources:
+  PracticeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: !Ref VersioningStatus
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+Outputs:
+  BucketName:
+    Description: Name of the bucket
+    Value: !Ref PracticeBucket
