@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC peering connection between two VPCs plus a route that sends peer-bound traffic across it
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Requester VPC
+  PeerVpcId:
+    Type: String
+    Description: ID of the VPC to peer with
+  PeerVpcCidr:
+    Type: String
+    Default: 10.1.0.0/16
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    Description: CIDR block of the peer VPC
+  RouteTableId:
+    Type: String
+    Description: Route table in the requester VPC that gets the peering route
+
+Resources:
+  PeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref VpcId
+      PeerVpcId: !Ref PeerVpcId
+      Tags:
+        - Key: Name
+          Value: practice-peering
+
+  PeerRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableId
+      DestinationCidrBlock: !Ref PeerVpcCidr
+      VpcPeeringConnectionId: !Ref PeeringConnection
+
+Outputs:
+  PeeringConnectionId:
+    Description: ID of the peering connection
+    Value: !Ref PeeringConnection
