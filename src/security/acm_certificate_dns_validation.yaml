@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ACM certificate for a domain and its wildcard, validated automatically through Route 53 DNS
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Apex domain for the certificate
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Public hosted zone that serves the domain
+
+Resources:
+  SiteCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub '*.${DomainName}'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+Outputs:
+  CertificateArn:
+    Description: ARN of the certificate
+    Value: !Ref SiteCertificate
