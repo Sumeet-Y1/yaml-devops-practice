@@ -1,54 +1,36 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an SQS queue encrypted with a customer managed KMS key, plus a
-  queue policy that denies any request not sent over HTTPS.
+Description: SQS queue encrypted with a customer managed KMS key and a data key reuse period
 
 Resources:
   QueueKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Description: Key that encrypts the practice queue
+      Description: Key for the encrypted queue
       EnableKeyRotation: true
+      PendingWindowInDays: 7
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: EnableIamPermissions
+          - Sid: EnableAccountPermissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action: kms:*
             Resource: '*'
 
   EncryptedQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-encrypted'
-      KmsMasterKeyId: !Ref QueueKey
+      KmsMasterKeyId: !GetAtt QueueKey.Arn
       KmsDataKeyReusePeriodSeconds: 300
       MessageRetentionPeriod: 345600
-
-  QueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref EncryptedQueue
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyInsecureTransport
-            Effect: Deny
-            Principal: '*'
-            Action: 'sqs:*'
-            Resource: !GetAtt EncryptedQueue.Arn
-            Condition:
-              Bool:
-                aws:SecureTransport: 'false'
 
 Outputs:
   QueueUrl:
     Description: URL of the encrypted queue
     Value: !Ref EncryptedQueue
-
   KeyArn:
-    Description: KMS key that protects the messages
+    Description: ARN of the KMS key
     Value: !GetAtt QueueKey.Arn
