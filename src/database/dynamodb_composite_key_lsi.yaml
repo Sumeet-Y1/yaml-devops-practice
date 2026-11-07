@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table with a hash and range key and a local secondary index that sorts by a different attribute
+
+Resources:
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub '${AWS::StackName}-customer-orders'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: CustomerId
+          AttributeType: S
+        - AttributeName: OrderDate
+          AttributeType: S
+        - AttributeName: OrderTotal
+          AttributeType: N
+      KeySchema:
+        - AttributeName: CustomerId
+          KeyType: HASH
+        - AttributeName: OrderDate
+          KeyType: RANGE
+      LocalSecondaryIndexes:
+        - IndexName: ByOrderTotal
+          KeySchema:
+            - AttributeName: CustomerId
+              KeyType: HASH
+            - AttributeName: OrderTotal
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - Status
+
+Outputs:
+  TableName:
+    Description: Name of the table
+    Value: !Ref OrdersTable
