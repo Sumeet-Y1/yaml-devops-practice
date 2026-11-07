@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto Scaling group with scheduled actions that scale up on weekday mornings and down in the evening
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets where instances are launched
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  WorkLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+
+  WorkAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '0'
+      MaxSize: '3'
+      DesiredCapacity: '0'
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WorkLaunchTemplate
+        Version: !Sub '${WorkLaunchTemplate.LatestVersionNumber}'
+
+  ScaleUpWeekdays:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WorkAutoScalingGroup
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      Recurrence: '0 9 * * 1-5'
+      TimeZone: Asia/Kolkata
+
+  ScaleDownEvenings:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WorkAutoScalingGroup
+      MinSize: 0
+      MaxSize: 0
+      DesiredCapacity: 0
+      Recurrence: '0 19 * * 1-5'
+      TimeZone: Asia/Kolkata
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling group
+    Value: !Ref WorkAutoScalingGroup
