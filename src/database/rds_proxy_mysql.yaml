@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS Proxy for a MySQL instance that pools connections and reads credentials from Secrets Manager
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the proxy
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups for the proxy
+  DbInstanceId:
+    Type: String
+    Description: Identifier of the existing RDS MySQL instance
+  DbSecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret with the database credentials
+
+Resources:
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadDatabaseSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DbSecretArn
+
+  DbProxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub '${AWS::StackName}-proxy'
+      EngineFamily: MYSQL
+      RoleArn: !GetAtt ProxyRole.Arn
+      VpcSubnetIds: !Ref SubnetIds
+      VpcSecurityGroupIds: !Ref SecurityGroupIds
+      RequireTLS: true
+      IdleClientTimeout: 1800
+      Auth:
+        - AuthScheme: SECRETS
+          SecretArn: !Ref DbSecretArn
+          IAMAuth: DISABLED
+
+  DbProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref DbProxy
+      TargetGroupName: default
+      DBInstanceIdentifiers:
+        - !Ref DbInstanceId
+      ConnectionPoolConfigurationInfo:
+        MaxConnectionsPercent: 80
+        MaxIdleConnectionsPercent: 50
+
+Outputs:
+  ProxyEndpoint:
+    Description: Endpoint applications should connect to
+    Value: !GetAtt DbProxy.Endpoint
+  ProxyArn:
+    Description: ARN of the proxy
+    Value: !GetAtt DbProxy.DBProxyArn
