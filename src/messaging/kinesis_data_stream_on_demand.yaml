@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Kinesis data stream in on-demand mode with 48 hour retention and server-side encryption
+
+Resources:
+  EventStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub '${AWS::StackName}-events'
+      RetentionPeriodHours: 48
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+
+Outputs:
+  StreamName:
+    Description: Name of the data stream
+    Value: !Ref EventStream
+  StreamArn:
+    Description: ARN of the data stream
+    Value: !GetAtt EventStream.Arn
