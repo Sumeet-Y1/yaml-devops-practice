@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 failover routing with a health-checked primary record and a standby secondary record
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that holds the records
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name of the hosted zone
+
+Resources:
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        IPAddress: 192.0.2.10
+        Port: 80
+        ResourcePath: /health
+        RequestInterval: 30
+        FailureThreshold: 3
+
+  PrimaryRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: primary
+      Failover: PRIMARY
+      HealthCheckId: !Ref PrimaryHealthCheck
+      ResourceRecords:
+        - 192.0.2.10
+
+  SecondaryRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: secondary
+      Failover: SECONDARY
+      ResourceRecords:
+        - 192.0.2.20
+
+Outputs:
+  HealthCheckId:
+    Description: ID of the primary health check
+    Value: !Ref PrimaryHealthCheck
+  PrimaryRecordName:
+    Description: Name of the primary record
+    Value: !Ref PrimaryRecord
