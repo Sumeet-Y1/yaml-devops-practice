@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Fn::Cidr, Fn::Select, and Fn::GetAZs used together to carve subnets out of a VPC across Availability Zones
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    Description: CIDR block for the VPC
+
+Resources:
+  PracticeVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+
+Outputs:
+  VpcId:
+    Description: ID of the VPC
+    Value: !Ref PracticeVpc
+  SubnetAId:
+    Description: ID of the first subnet
+    Value: !Ref SubnetA
+  SubnetAZone:
+    Description: Availability Zone of the first subnet
+    Value: !GetAtt SubnetA.AvailabilityZone
+  SubnetBId:
+    Description: ID of the second subnet
+    Value: !Ref SubnetB
