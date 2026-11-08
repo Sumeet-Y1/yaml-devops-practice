@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 Resolver inbound endpoint so on-premises networks can resolve names hosted inside the VPC
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Two subnets in different Availability Zones
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups that allow DNS (port 53 TCP and UDP) from on-premises
+
+Resources:
+  InboundResolverEndpoint:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-inbound'
+      Direction: INBOUND
+      SecurityGroupIds: !Ref SecurityGroupIds
+      IpAddresses:
+        - SubnetId: !Select [0, !Ref SubnetIds]
+        - SubnetId: !Select [1, !Ref SubnetIds]
+
+Outputs:
+  ResolverEndpointId:
+    Description: ID of the inbound resolver endpoint
+    Value: !Ref InboundResolverEndpoint
