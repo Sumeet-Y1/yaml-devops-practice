@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GuardDuty detector with fast finding publication and optional protection features turned on
+
+Resources:
+  ThreatDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+      Features:
+        - Name: S3_DATA_EVENTS
+          Status: ENABLED
+        - Name: RDS_LOGIN_EVENTS
+          Status: ENABLED
+        - Name: LAMBDA_NETWORK_LOGS
+          Status: ENABLED
+
+Outputs:
+  DetectorId:
+    Description: ID of the GuardDuty detector
+    Value: !Ref ThreatDetector
