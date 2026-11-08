@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Conditions with Fn::If and AWS::NoValue to add or completely remove a property depending on a parameter
+
+Parameters:
+  EncryptTopic:
+    Type: String
+    Default: disabled
+    AllowedValues:
+      - enabled
+      - disabled
+    Description: Whether the topic uses the AWS managed SNS key
+
+Conditions:
+  UseEncryption: !Equals [!Ref EncryptTopic, enabled]
+
+Resources:
+  OptionalEncryptionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Optional encryption demo
+      KmsMasterKeyId: !If [UseEncryption, alias/aws/sns, !Ref 'AWS::NoValue']
+
+Outputs:
+  TopicArn:
+    Description: ARN of the topic
+    Value: !Ref OptionalEncryptionTopic
