@@ -1,36 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an SQS FIFO queue in high throughput mode (deduplication and
-  throughput limits applied per message group), with long polling and a
-  FIFO dead-letter queue.
+Description: SQS FIFO queue in high throughput mode with deduplication and throughput limits applied per message group
 
 Resources:
-  DeadLetterQueue:
+  HighThroughputQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-dlq.fifo'
-      FifoQueue: true
-      MessageRetentionPeriod: 1209600
-
-  OrdersQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub '${AWS::StackName}-orders.fifo'
+      QueueName: !Sub '${AWS::StackName}-high-throughput.fifo'
       FifoQueue: true
       ContentBasedDeduplication: true
       DeduplicationScope: messageGroup
       FifoThroughputLimit: perMessageGroupId
-      VisibilityTimeout: 60
-      ReceiveMessageWaitTimeSeconds: 20
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
-        maxReceiveCount: 5
 
 Outputs:
-  OrdersQueueUrl:
-    Description: Use many different MessageGroupId values to get high throughput
-    Value: !Ref OrdersQueue
-
-  DeadLetterQueueUrl:
-    Description: FIFO queues need a FIFO dead-letter queue
-    Value: !Ref DeadLetterQueue
+  QueueUrl:
+    Description: URL of the FIFO queue
+    Value: !Ref HighThroughputQueue
+  QueueArn:
+    Description: ARN of the FIFO queue
+    Value: !GetAtt HighThroughputQueue.Arn
