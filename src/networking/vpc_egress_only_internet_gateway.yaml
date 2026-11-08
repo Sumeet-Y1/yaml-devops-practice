@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Egress-only internet gateway that lets IPv6 instances reach the internet without accepting inbound connections
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that gets the gateway
+  RouteTableId:
+    Type: String
+    Description: Route table that gets the IPv6 default route
+
+Resources:
+  EgressOnlyGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref VpcId
+
+  Ipv6DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableId
+      DestinationIpv6CidrBlock: '::/0'
+      EgressOnlyInternetGatewayId: !Ref EgressOnlyGateway
+
+Outputs:
+  EgressOnlyGatewayId:
+    Description: ID of the egress-only internet gateway
+    Value: !Ref EgressOnlyGateway
