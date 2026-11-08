@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge rule that reshapes EC2 state change events with an input transformer before publishing to SNS
+
+Resources:
+  StateChangeTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: EC2 state changes
+
+  StateChangeTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref StateChangeTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref StateChangeTopic
+
+  StateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Notify when an instance stops or terminates
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+        detail:
+          state:
+            - stopped
+            - terminated
+      Targets:
+        - Id: NotifyTopic
+          Arn: !Ref StateChangeTopic
+          InputTransformer:
+            InputPathsMap:
+              instance: $.detail.instance-id
+              state: $.detail.state
+            InputTemplate: '"Instance <instance> changed state to <state>"'
+
+Outputs:
+  TopicArn:
+    Description: ARN of the notification topic
+    Value: !Ref StateChangeTopic
+  RuleName:
+    Description: Name of the EventBridge rule
+    Value: !Ref StateChangeRule
