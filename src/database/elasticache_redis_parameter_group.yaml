@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ElastiCache parameter group for Redis 7 with an LRU eviction policy and a client idle timeout
+
+Resources:
+  RedisParameterGroup:
+    Type: AWS::ElastiCache::ParameterGroup
+    Properties:
+      CacheParameterGroupFamily: redis7
+      Description: Redis 7 parameters for a cache that evicts least recently used keys
+      Properties:
+        maxmemory-policy: allkeys-lru
+        timeout: '300'
+
+Outputs:
+  ParameterGroupName:
+    Description: Name of the cache parameter group
+    Value: !Ref RedisParameterGroup
