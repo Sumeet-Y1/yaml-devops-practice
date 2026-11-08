@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table using the Standard-IA table class with deletion protection turned on
+
+Resources:
+  ArchiveTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub '${AWS::StackName}-archive'
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS
+      DeletionProtectionEnabled: true
+      AttributeDefinitions:
+        - AttributeName: RecordId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: RecordId
+          KeyType: HASH
+
+Outputs:
+  TableName:
+    Description: Name of the archive table
+    Value: !Ref ArchiveTable
