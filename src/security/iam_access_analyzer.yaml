@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM Access Analyzer for the account that reports resources shared outside it
+
+Resources:
+  AccountAnalyzer:
+    Type: AWS::AccessAnalyzer::Analyzer
+    Properties:
+      AnalyzerName: !Sub '${AWS::StackName}-account-analyzer'
+      Type: ACCOUNT
+      Tags:
+        - Key: Purpose
+          Value: external-access-findings
+
+Outputs:
+  AnalyzerArn:
+    Description: ARN of the analyzer
+    Value: !GetAtt AccountAnalyzer.Arn
