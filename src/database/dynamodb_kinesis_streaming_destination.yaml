@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table that streams item-level changes into a Kinesis data stream
+
+Resources:
+  ChangeStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub '${AWS::StackName}-events'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: EventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: EventId
+          KeyType: HASH
+      KinesisStreamSpecification:
+        StreamArn: !GetAtt ChangeStream.Arn
+
+Outputs:
+  TableName:
+    Description: Name of the table
+    Value: !Ref EventsTable
+  StreamArn:
+    Description: ARN of the Kinesis stream that receives changes
+    Value: !GetAtt ChangeStream.Arn
