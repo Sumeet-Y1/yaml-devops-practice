@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cluster placement group referenced from a launch template for low-latency networking between instances
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  ClusterPlacementGroup:
+    Type: AWS::EC2::PlacementGroup
+    Properties:
+      Strategy: cluster
+
+  ClusterLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-cluster'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: c5.large
+        Placement:
+          GroupName: !Ref ClusterPlacementGroup
+        MetadataOptions:
+          HttpTokens: required
+
+Outputs:
+  PlacementGroupName:
+    Description: Name of the placement group
+    Value: !Ref ClusterPlacementGroup
+  LaunchTemplateId:
+    Description: ID of the launch template
+    Value: !Ref ClusterLaunchTemplate
