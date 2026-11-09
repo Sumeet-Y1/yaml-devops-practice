@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS event subscription that publishes instance failure, failover, and storage events to an SNS topic
+
+Resources:
+  RdsEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: RDS events
+
+  RdsEventsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref RdsEventsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.rds.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref RdsEventsTopic
+
+  DbEventSubscription:
+    Type: AWS::RDS::EventSubscription
+    Properties:
+      SnsTopicArn: !Ref RdsEventsTopic
+      SourceType: db-instance
+      Enabled: true
+      EventCategories:
+        - failure
+        - failover
+        - low storage
+        - maintenance
+
+Outputs:
+  TopicArn:
+    Description: ARN of the RDS events topic
+    Value: !Ref RdsEventsTopic
+  SubscriptionName:
+    Description: Name of the event subscription
+    Value: !Ref DbEventSubscription
