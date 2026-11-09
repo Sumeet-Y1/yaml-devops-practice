@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS subscription with its own dead letter queue so messages SNS cannot deliver are kept instead of lost
+
+Resources:
+  OrdersTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Orders
+
+  ConsumerQueue:
+    Type: AWS::SQS::Queue
+
+  SubscriptionDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  ConsumerQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ConsumerQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ConsumerQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref OrdersTopic
+
+  DeadLetterQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SubscriptionDeadLetterQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SubscriptionDeadLetterQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref OrdersTopic
+
+  OrdersSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrdersTopic
+      Protocol: sqs
+      Endpoint: !GetAtt ConsumerQueue.Arn
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SubscriptionDeadLetterQueue.Arn
+
+Outputs:
+  TopicArn:
+    Description: ARN of the topic
+    Value: !Ref OrdersTopic
+  DeadLetterQueueUrl:
+    Description: Queue that holds undeliverable messages
+    Value: !Ref SubscriptionDeadLetterQueue
