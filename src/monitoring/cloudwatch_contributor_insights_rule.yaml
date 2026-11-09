@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Contributor Insights rule that finds the client IPs causing the most 5xx errors in JSON access logs
+
+Resources:
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+  TopErrorIpsRule:
+    Type: AWS::CloudWatch::InsightRule
+    Properties:
+      RuleName: !Sub '${AWS::StackName}-top-error-ips'
+      RuleState: ENABLED
+      RuleBody: !Sub |
+        {
+          "Schema": {"Name": "CloudWatchLogRule", "Version": 1},
+          "AggregateOn": "Count",
+          "Contribution": {
+            "Filters": [{"Match": "$.status", "GreaterThan": 499}],
+            "Keys": ["$.clientIp"]
+          },
+          "LogFormat": "JSON",
+          "LogGroupNames": ["${AccessLogGroup}"]
+        }
+
+Outputs:
+  LogGroupName:
+    Description: Log group the rule analyses
+    Value: !Ref AccessLogGroup
+  RuleName:
+    Description: Name of the Contributor Insights rule
+    Value: !Ref TopErrorIpsRule
