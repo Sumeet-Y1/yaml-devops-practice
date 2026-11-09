@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Transit gateway with default route table association and propagation, plus one VPC attachment
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to attach
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: One subnet per Availability Zone for the attachment
+
+Resources:
+  PracticeTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: Hub for connecting VPCs
+      DefaultRouteTableAssociation: enable
+      DefaultRouteTablePropagation: enable
+      DnsSupport: enable
+      AutoAcceptSharedAttachments: disable
+      Tags:
+        - Key: Name
+          Value: practice-tgw
+
+  VpcAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref PracticeTransitGateway
+      VpcId: !Ref VpcId
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: practice-tgw-attachment
+
+Outputs:
+  TransitGatewayId:
+    Description: ID of the transit gateway
+    Value: !Ref PracticeTransitGateway
+  AttachmentId:
+    Description: ID of the VPC attachment
+    Value: !Ref VpcAttachment
