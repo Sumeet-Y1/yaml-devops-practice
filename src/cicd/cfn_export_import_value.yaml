@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cross-stack references where this stack imports a KMS key ARN with Fn::ImportValue and exports its own queue URL
+
+Resources:
+  EncryptedQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: !ImportValue practice-shared-key-arn
+      MessageRetentionPeriod: 86400
+
+Outputs:
+  QueueUrl:
+    Description: URL of the queue other stacks can import
+    Value: !Ref EncryptedQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-queue-url'
+  QueueArn:
+    Description: ARN of the queue other stacks can import
+    Value: !GetAtt EncryptedQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-queue-arn'
