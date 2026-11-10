@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFront Function that adds security headers to every viewer response at the edge
+
+Resources:
+  SecurityHeadersFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-security-headers'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Adds HSTS and content type protection headers
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var response = event.response;
+          var headers = response.headers;
+          headers['strict-transport-security'] = { value: 'max-age=63072000; includeSubDomains' };
+          headers['x-content-type-options'] = { value: 'nosniff' };
+          headers['x-frame-options'] = { value: 'DENY' };
+          return response;
+        }
+
+Outputs:
+  FunctionArn:
+    Description: ARN to attach to a viewer-response event on a distribution
+    Value: !GetAtt SecurityHeadersFunction.FunctionMetadata.FunctionARN
