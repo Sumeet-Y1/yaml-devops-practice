@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: WAFv2 IP set of blocked CIDR ranges referenced by a web ACL rule that blocks matching requests
+
+Parameters:
+  BlockedCidrs:
+    Type: CommaDelimitedList
+    Default: 192.0.2.0/24
+    Description: IPv4 CIDR ranges to block
+
+Resources:
+  BlockedIpSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub '${AWS::StackName}-blocked-ips'
+      Description: IPv4 ranges that must not reach the application
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses: !Ref BlockedCidrs
+
+  IpBlockWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-ip-block'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${AWS::StackName}-ip-block-acl'
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: BlockListedIps
+          Priority: 0
+          Action:
+            Block: {}
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt BlockedIpSet.Arn
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${AWS::StackName}-blocked-ips-rule'
+            SampledRequestsEnabled: true
+
+Outputs:
+  IpSetArn:
+    Description: ARN of the IP set
+    Value: !GetAtt BlockedIpSet.Arn
+  WebAclArn:
+    Description: ARN of the web ACL
+    Value: !GetAtt IpBlockWebAcl.Arn
