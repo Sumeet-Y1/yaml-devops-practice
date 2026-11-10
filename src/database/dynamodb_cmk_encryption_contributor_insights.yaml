@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table encrypted with a customer managed KMS key and Contributor Insights turned on for hot key analysis
+
+Resources:
+  TableKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: Key for the encrypted DynamoDB table
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableAccountPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+
+  TelemetryTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub '${AWS::StackName}-telemetry'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: DeviceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: DeviceId
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref TableKey
+      ContributorInsightsSpecification:
+        Enabled: true
+
+Outputs:
+  TableName:
+    Description: Name of the table
+    Value: !Ref TelemetryTable
+  KeyArn:
+    Description: ARN of the KMS key
+    Value: !GetAtt TableKey.Arn
