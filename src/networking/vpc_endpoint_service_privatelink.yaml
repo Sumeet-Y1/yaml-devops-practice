@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: PrivateLink endpoint service that exposes a Network Load Balancer to one trusted consumer account
+
+Parameters:
+  NetworkLoadBalancerArn:
+    Type: String
+    Description: ARN of the Network Load Balancer to expose
+  ConsumerAccountId:
+    Type: String
+    AllowedPattern: '^[0-9]{12}$'
+    Description: 12-digit ID of the account allowed to create endpoints
+
+Resources:
+  PrivateLinkService:
+    Type: AWS::EC2::VPCEndpointService
+    Properties:
+      AcceptanceRequired: true
+      NetworkLoadBalancerArns:
+        - !Ref NetworkLoadBalancerArn
+
+  ConsumerPermission:
+    Type: AWS::EC2::VPCEndpointServicePermissions
+    Properties:
+      ServiceId: !Ref PrivateLinkService
+      AllowedPrincipals:
+        - !Sub 'arn:aws:iam::${ConsumerAccountId}:root'
+
+Outputs:
+  ServiceId:
+    Description: ID of the endpoint service
+    Value: !Ref PrivateLinkService
