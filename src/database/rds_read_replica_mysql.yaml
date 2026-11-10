@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS MySQL read replica created from an existing source instance
+
+Parameters:
+  SourceDbInstanceId:
+    Type: String
+    Description: Identifier of the existing RDS MySQL instance to replicate
+
+Resources:
+  MySqlReadReplica:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      SourceDBInstanceIdentifier: !Ref SourceDbInstanceId
+      DBInstanceClass: db.t4g.micro
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+
+Outputs:
+  ReplicaEndpoint:
+    Description: Endpoint address of the read replica
+    Value: !GetAtt MySqlReadReplica.Endpoint.Address
+  ReplicaIdentifier:
+    Description: Identifier of the read replica
+    Value: !Ref MySqlReadReplica
