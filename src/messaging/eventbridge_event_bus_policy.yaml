@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Custom EventBridge event bus with a resource policy that lets one trusted account send events to it
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    AllowedPattern: '^[0-9]{12}$'
+    Description: 12-digit ID of the account allowed to put events
+
+Resources:
+  SharedEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-shared-bus'
+
+  CrossAccountPutEventsPolicy:
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+      EventBusName: !Ref SharedEventBus
+      StatementId: AllowPutEventsFromTrustedAccount
+      Action: events:PutEvents
+      Principal: !Ref TrustedAccountId
+
+Outputs:
+  EventBusName:
+    Description: Name of the shared event bus
+    Value: !Ref SharedEventBus
+  EventBusArn:
+    Description: ARN the trusted account targets when sending events
+    Value: !GetAtt SharedEventBus.Arn
