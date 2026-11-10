@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda triggered by a DynamoDB stream with an INSERT-only event filter, batch bisecting, and limited retries
+
+Resources:
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub '${AWS::StackName}-items'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ItemId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ItemId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  StreamHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
+
+  StreamHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt StreamHandlerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              for record in event["Records"]:
+                  print(record["dynamodb"]["NewImage"])
+
+  StreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ItemsTable.StreamArn
+      FunctionName: !Ref StreamHandlerFunction
+      StartingPosition: LATEST
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 5
+      BisectBatchOnFunctionError: true
+      MaximumRetryAttempts: 2
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"eventName": ["INSERT"]}'
+
+Outputs:
+  TableName:
+    Description: Name of the table
+    Value: !Ref ItemsTable
+  FunctionName:
+    Description: Name of the stream handler
+    Value: !Ref StreamHandlerFunction
