@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch alarm that automatically recovers an EC2 instance when its system status check fails
+
+Parameters:
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+    Description: Instance to protect
+
+Resources:
+  SystemStatusRecoveryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Recover the instance when the system status check fails
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceId
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Sub 'arn:aws:automate:${AWS::Region}:ec2:recover'
+
+Outputs:
+  AlarmName:
+    Description: Name of the recovery alarm
+    Value: !Ref SystemStatusRecoveryAlarm
