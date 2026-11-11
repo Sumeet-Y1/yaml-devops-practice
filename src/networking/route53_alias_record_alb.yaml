@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 alias A record that points a friendly name at an Application Load Balancer
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that holds the record
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name of the hosted zone
+  LoadBalancerDnsName:
+    Type: String
+    Description: DNS name of the load balancer
+  LoadBalancerHostedZoneId:
+    Type: String
+    Description: Canonical hosted zone ID of the load balancer
+
+Resources:
+  WebAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'www.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !Ref LoadBalancerDnsName
+        HostedZoneId: !Ref LoadBalancerHostedZoneId
+        EvaluateTargetHealth: true
+
+Outputs:
+  RecordName:
+    Description: Name of the alias record
+    Value: !Ref WebAliasRecord
