@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge Pipe that reads an SQS queue, filters for high priority messages, and invokes a Lambda function
+
+Resources:
+  SourceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  TargetFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  TargetFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt TargetFunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print(event)
+              return event
+
+  PipeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pipes.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadQueueInvokeFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt SourceQueue.Arn
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt TargetFunction.Arn
+
+  HighPriorityPipe:
+    Type: AWS::Pipes::Pipe
+    Properties:
+      Name: !Sub '${AWS::StackName}-high-priority'
+      RoleArn: !GetAtt PipeRole.Arn
+      Source: !GetAtt SourceQueue.Arn
+      SourceParameters:
+        SqsQueueParameters:
+          BatchSize: 5
+          MaximumBatchingWindowInSeconds: 10
+        FilterCriteria:
+          Filters:
+            - Pattern: '{"body": {"priority": ["high"]}}'
+      Target: !GetAtt TargetFunction.Arn
+      DesiredState: RUNNING
+
+Outputs:
+  PipeName:
+    Description: Name of the pipe
+    Value: !Ref HighPriorityPipe
+  QueueUrl:
+    Description: URL of the source queue
+    Value: !Ref SourceQueue
