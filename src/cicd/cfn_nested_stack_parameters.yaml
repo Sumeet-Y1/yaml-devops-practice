@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Parent template that launches a child stack, passes it a parameter, and reads one of the child outputs
+
+Parameters:
+  ChildTemplateUrl:
+    Type: String
+    Default: https://s3.amazonaws.com/example-bucket/child_queue.yaml
+    Description: S3 URL of the child template that creates one SQS queue
+  QueueName:
+    Type: String
+    Default: nested-demo-queue
+    Description: Queue name passed to the child stack
+
+Resources:
+  ChildQueueStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref ChildTemplateUrl
+      TimeoutInMinutes: 10
+      Parameters:
+        QueueName: !Ref QueueName
+
+Outputs:
+  ChildStackId:
+    Description: ID of the nested stack
+    Value: !Ref ChildQueueStack
+  ChildQueueUrl:
+    Description: Queue URL exposed by an output of the child stack
+    Value: !GetAtt ChildQueueStack.Outputs.QueueUrl
