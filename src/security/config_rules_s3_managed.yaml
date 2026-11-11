@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Two AWS Config managed rules that flag S3 buckets allowing public reads or accepting non-TLS requests
+
+Resources:
+  PublicReadProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-s3-public-read-prohibited'
+      Description: Checks that S3 buckets do not allow public read access
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+  SslRequestsOnlyRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-s3-ssl-requests-only'
+      Description: Checks that S3 bucket policies deny requests that do not use TLS
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SSL_REQUESTS_ONLY
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+Outputs:
+  PublicReadRuleArn:
+    Description: ARN of the public read rule
+    Value: !GetAtt PublicReadProhibitedRule.Arn
+  SslRuleArn:
+    Description: ARN of the TLS only rule
+    Value: !GetAtt SslRequestsOnlyRule.Arn
