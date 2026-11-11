@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda function in a VPC that mounts an EFS access point so state survives between invocations
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets that can reach the EFS mount targets
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups that allow NFS (port 2049) to the file system
+  AccessPointArn:
+    Type: String
+    Description: ARN of the EFS access point to mount
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess
+
+  CounterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Timeout: 30
+      VpcConfig:
+        SubnetIds: !Ref SubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+      FileSystemConfigs:
+        - Arn: !Ref AccessPointArn
+          LocalMountPath: /mnt/efs
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              path = "/mnt/efs/hits.txt"
+              try:
+                  with open(path) as f:
+                      hits = int(f.read())
+              except FileNotFoundError:
+                  hits = 0
+              hits += 1
+              with open(path, "w") as f:
+                  f.write(str(hits))
+              return {"hits": hits}
+
+Outputs:
+  FunctionName:
+    Description: Name of the function with the EFS mount
+    Value: !Ref CounterFunction
