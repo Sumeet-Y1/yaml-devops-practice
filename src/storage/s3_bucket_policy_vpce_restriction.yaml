@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket whose policy denies every request that does not arrive through a specific VPC endpoint
+
+Parameters:
+  VpcEndpointId:
+    Type: String
+    Description: ID of the S3 gateway endpoint that is allowed to reach the bucket
+
+Resources:
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'vpce-only-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  PrivateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PrivateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyAccessOutsideVpcEndpoint
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt PrivateBucket.Arn
+              - !Sub '${PrivateBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref VpcEndpointId
+
+Outputs:
+  BucketName:
+    Description: Name of the endpoint-restricted bucket
+    Value: !Ref PrivateBucket
