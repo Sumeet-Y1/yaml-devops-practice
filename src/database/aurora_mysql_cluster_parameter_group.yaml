@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurora MySQL 8.0 cluster parameter group with utf8mb4, slow query logging, and a local time zone
+
+Resources:
+  AuroraMySqlClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: Aurora MySQL 8.0 cluster-level settings
+      Family: aurora-mysql8.0
+      Parameters:
+        character_set_server: utf8mb4
+        collation_server: utf8mb4_unicode_ci
+        slow_query_log: '1'
+        long_query_time: '2'
+        time_zone: Asia/Kolkata
+
+Outputs:
+  ClusterParameterGroupName:
+    Description: Name of the cluster parameter group
+    Value: !Ref AuroraMySqlClusterParameterGroup
