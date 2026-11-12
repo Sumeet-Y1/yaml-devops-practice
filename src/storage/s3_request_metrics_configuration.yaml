@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket with CloudWatch request metrics for the whole bucket and for one prefix
+
+Resources:
+  MetricsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'metrics-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      MetricsConfigurations:
+        - Id: EntireBucket
+        - Id: UploadsPrefix
+          Prefix: uploads/
+
+Outputs:
+  BucketName:
+    Description: Name of the bucket with request metrics
+    Value: !Ref MetricsBucket
