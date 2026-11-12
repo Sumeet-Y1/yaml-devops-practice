@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda-backed custom resource that runs code during stack create and update and returns a value to the template
+
+Parameters:
+  GreetingName:
+    Type: String
+    Default: practice
+    Description: Name passed to the custom resource
+
+Resources:
+  CustomResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  GreetingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt CustomResourceRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import cfnresponse
+
+          def handler(event, context):
+              data = {}
+              if event["RequestType"] in ("Create", "Update"):
+                  name = event["ResourceProperties"].get("Name", "world")
+                  data["Greeting"] = "Hello " + name
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, data)
+
+  GreetingResource:
+    Type: Custom::Greeting
+    Properties:
+      ServiceToken: !GetAtt GreetingFunction.Arn
+      Name: !Ref GreetingName
+
+Outputs:
+  GreetingMessage:
+    Description: Value returned by the custom resource
+    Value: !GetAtt GreetingResource.Greeting
