@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ElastiCache Serverless cache for Redis with usage limits so capacity scales automatically within a cap
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in different Availability Zones for the cache endpoints
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups allowed to reach the cache
+
+Resources:
+  ServerlessRedisCache:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      ServerlessCacheName: !Sub '${AWS::StackName}-cache'
+      Description: Serverless Redis cache with a storage and throughput cap
+      Engine: redis
+      MajorEngineVersion: '7'
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds: !Ref SecurityGroupIds
+      CacheUsageLimits:
+        DataStorage:
+          Maximum: 5
+          Unit: GB
+        ECPUPerSecond:
+          Maximum: 5000
+
+Outputs:
+  CacheEndpoint:
+    Description: Endpoint address for connecting to the cache
+    Value: !GetAtt ServerlessRedisCache.Endpoint.Address
+  CacheArn:
+    Description: ARN of the serverless cache
+    Value: !GetAtt ServerlessRedisCache.ARN
