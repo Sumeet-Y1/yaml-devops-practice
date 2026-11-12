@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC gateway endpoint for DynamoDB so private subnets reach the service without a NAT gateway
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that gets the endpoint
+  RouteTableIds:
+    Type: CommaDelimitedList
+    Description: Route table IDs that should route DynamoDB traffic through the endpoint
+
+Resources:
+  DynamoDbGatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'
+      VpcEndpointType: Gateway
+      RouteTableIds: !Ref RouteTableIds
+
+Outputs:
+  EndpointId:
+    Description: ID of the DynamoDB gateway endpoint
+    Value: !Ref DynamoDbGatewayEndpoint
