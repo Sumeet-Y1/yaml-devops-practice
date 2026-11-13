@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch alarm that notifies an SNS topic when the oldest message in an SQS queue gets too old
+
+Parameters:
+  MaxAgeSeconds:
+    Type: Number
+    Default: 600
+    MinValue: 1
+    Description: Alert when the oldest message is older than this many seconds
+
+Resources:
+  WorkQueue:
+    Type: AWS::SQS::Queue
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Queue backlog alerts
+
+  QueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Messages are waiting too long in the queue
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt WorkQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref MaxAgeSeconds
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+Outputs:
+  QueueUrl:
+    Description: URL of the monitored queue
+    Value: !Ref WorkQueue
+  AlarmName:
+    Description: Name of the queue age alarm
+    Value: !Ref QueueAgeAlarm
