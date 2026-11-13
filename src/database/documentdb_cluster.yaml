@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon DocumentDB cluster with one instance, encryption at rest, and a managed master password
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones
+
+Resources:
+  DocDbSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the DocumentDB cluster
+      SubnetIds: !Ref SubnetIds
+
+  DocDbCluster:
+    Type: AWS::DocDB::DBCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      StorageEncrypted: true
+      DBSubnetGroupName: !Ref DocDbSubnetGroup
+      BackupRetentionPeriod: 1
+      EnableCloudwatchLogsExports:
+        - audit
+
+  DocDbInstance:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DocDbCluster
+      DBInstanceClass: db.t4g.medium
+
+Outputs:
+  ClusterEndpoint:
+    Description: Writer endpoint of the cluster
+    Value: !GetAtt DocDbCluster.Endpoint
+  ClusterPort:
+    Description: Port of the cluster
+    Value: !GetAtt DocDbCluster.Port
