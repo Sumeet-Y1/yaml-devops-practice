@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS topic with a topic policy that lets one trusted AWS account publish messages to it
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    AllowedPattern: '^[0-9]{12}$'
+    Description: 12-digit ID of the account allowed to publish
+
+Resources:
+  SharedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Shared notifications
+
+  SharedTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref SharedTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowTrustedAccountPublish
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+            Action: sns:Publish
+            Resource: !Ref SharedTopic
+
+Outputs:
+  TopicArn:
+    Description: ARN the trusted account publishes to
+    Value: !Ref SharedTopic
