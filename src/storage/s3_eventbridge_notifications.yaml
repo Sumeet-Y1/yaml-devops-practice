@@ -1,28 +1,32 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Turns on S3 event delivery to EventBridge and uses a rule with a key
-  prefix filter to send new uploads under uploads/ to an SQS queue.
+Description: S3 bucket that sends object-created events to EventBridge, where a rule routes them to an SQS queue
 
 Resources:
-  UploadBucket:
+  UploadsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
+      BucketName: !Sub 'eb-events-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
-  UploadQueue:
+  UploadEventsQueue:
     Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 86400
 
-  UploadRule:
+  UploadEventsRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-new-uploads'
+      Description: Send object-created events for the uploads bucket to SQS
+      State: ENABLED
       EventPattern:
         source:
           - aws.s3
@@ -31,19 +35,16 @@ Resources:
         detail:
           bucket:
             name:
-              - !Ref UploadBucket
-          object:
-            key:
-              - prefix: uploads/
+              - !Sub 'eb-events-${AWS::AccountId}-${AWS::Region}'
       Targets:
-        - Id: UploadQueueTarget
-          Arn: !GetAtt UploadQueue.Arn
+        - Id: UploadEventsQueueTarget
+          Arn: !GetAtt UploadEventsQueue.Arn
 
-  UploadQueuePolicy:
+  UploadEventsQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
       Queues:
-        - !Ref UploadQueue
+        - !Ref UploadEventsQueue
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -51,16 +52,15 @@ Resources:
             Principal:
               Service: events.amazonaws.com
             Action: sqs:SendMessage
-            Resource: !GetAtt UploadQueue.Arn
+            Resource: !GetAtt UploadEventsQueue.Arn
             Condition:
               ArnEquals:
-                aws:SourceArn: !GetAtt UploadRule.Arn
+                aws:SourceArn: !GetAtt UploadEventsRule.Arn
 
 Outputs:
   BucketName:
-    Description: Upload a file under uploads/ to trigger the rule
-    Value: !Ref UploadBucket
-
-  UploadQueueUrl:
-    Description: Receives the EventBridge events
-    Value: !Ref UploadQueue
+    Description: Bucket that emits events to EventBridge
+    Value: !Ref UploadsBucket
+  QueueUrl:
+    Description: Queue that receives the routed events
+    Value: !Ref UploadEventsQueue
