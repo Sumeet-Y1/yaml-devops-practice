@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 geolocation routing that answers differently for India, Europe, and everyone else
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Hosted zone that holds the records
+  DomainName:
+    Type: String
+    Default: example.com
+    Description: Domain name of the hosted zone
+
+Resources:
+  IndiaRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: india
+      GeoLocation:
+        CountryCode: IN
+      ResourceRecords:
+        - 192.0.2.10
+
+  EuropeRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: europe
+      GeoLocation:
+        ContinentCode: EU
+      ResourceRecords:
+        - 192.0.2.20
+
+  DefaultRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      TTL: '60'
+      SetIdentifier: default
+      GeoLocation:
+        CountryCode: '*'
+      ResourceRecords:
+        - 192.0.2.30
+
+Outputs:
+  IndiaRecordName:
+    Description: Name of the India record
+    Value: !Ref IndiaRecord
+  DefaultRecordName:
+    Description: Name of the default record
+    Value: !Ref DefaultRecord
