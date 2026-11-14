@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda function on ARM with JSON structured logs, log level controls, a dedicated log group, and X-Ray tracing
+
+Resources:
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/json-logs'
+      RetentionInDays: 14
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  TracedFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Architectures:
+        - arm64
+      TracingConfig:
+        Mode: Active
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: WARN
+        LogGroup: !Ref FunctionLogGroup
+      Code:
+        ZipFile: |
+          import logging
+
+          logger = logging.getLogger()
+
+          def handler(event, context):
+              logger.info("handling request")
+              return {"statusCode": 200}
+
+Outputs:
+  FunctionName:
+    Description: Name of the function
+    Value: !Ref TracedFunction
+  LogGroupName:
+    Description: Log group that receives the JSON logs
+    Value: !Ref FunctionLogGroup
