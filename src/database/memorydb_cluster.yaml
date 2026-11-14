@@ -1,66 +1,41 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an Amazon MemoryDB cluster with a subnet group, a password-based
-  user, an access control list, and in-transit encryption.
+Description: MemoryDB for Redis cluster with one shard, one replica, TLS, and the default open-access ACL
 
 Parameters:
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnets for the cluster
-
-  SecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Security group allowing TCP 6379 from clients
-
-  UserPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 16
-    MaxLength: 128
-    Description: Password for the app user (16-128 characters)
+    Description: Subnets in different Availability Zones for the cluster
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups allowed to reach the cluster
 
 Resources:
-  SubnetGroup:
+  MemoryDbSubnetGroup:
     Type: AWS::MemoryDB::SubnetGroup
     Properties:
       SubnetGroupName: !Sub '${AWS::StackName}-subnets'
+      Description: Subnets for the MemoryDB cluster
       SubnetIds: !Ref SubnetIds
-
-  AppUser:
-    Type: AWS::MemoryDB::User
-    Properties:
-      UserName: app-user
-      AccessString: on ~* &* +@all
-      AuthenticationMode:
-        Type: password
-        Passwords:
-          - !Ref UserPassword
-
-  Acl:
-    Type: AWS::MemoryDB::ACL
-    Properties:
-      ACLName: !Sub '${AWS::StackName}-acl'
-      UserNames:
-        - !Ref AppUser
 
   MemoryDbCluster:
     Type: AWS::MemoryDB::Cluster
     Properties:
-      ClusterName: !Sub '${AWS::StackName}-cluster'
+      ClusterName: !Sub '${AWS::StackName}-memorydb'
+      Description: Durable in-memory database for practice
       NodeType: db.t4g.small
-      ACLName: !Ref Acl
-      SubnetGroupName: !Ref SubnetGroup
-      SecurityGroupIds:
-        - !Ref SecurityGroupId
+      ACLName: open-access
+      EngineVersion: '7.1'
       NumShards: 1
-      NumReplicasPerShard: 0
+      NumReplicasPerShard: 1
       TLSEnabled: true
+      AutoMinorVersionUpgrade: true
+      SubnetGroupName: !Ref MemoryDbSubnetGroup
+      SecurityGroupIds: !Ref SecurityGroupIds
 
 Outputs:
   ClusterEndpoint:
-    Description: Cluster endpoint address
+    Description: Endpoint address for connecting to the cluster
     Value: !GetAtt MemoryDbCluster.ClusterEndpoint.Address
-
-  ClusterPort:
-    Description: Cluster port
-    Value: !Sub '${MemoryDbCluster.ClusterEndpoint.Port}'
+  ClusterArn:
+    Description: ARN of the cluster
+    Value: !GetAtt MemoryDbCluster.ARN
