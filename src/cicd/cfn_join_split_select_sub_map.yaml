@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Fn::Join, Fn::Split, Fn::Select, and Fn::Sub with a variable map used to build names and paths
+
+Parameters:
+  NameParts:
+    Type: CommaDelimitedList
+    Default: team,app,dev
+    Description: Name segments that get joined with dashes
+  SlashPath:
+    Type: String
+    Default: team/app/dev
+    Description: Slash-separated path that gets split into pieces
+
+Resources:
+  JoinedNameTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Join ['-', !Ref NameParts]
+
+  SplitNameQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Join ['-', !Split ['/', !Ref SlashPath]]
+
+  TopicArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub
+        - '/${Team}/${App}/${Stage}/topic-arn'
+        - Team: !Select [0, !Split ['/', !Ref SlashPath]]
+          App: !Select [1, !Split ['/', !Ref SlashPath]]
+          Stage: !Select [2, !Split ['/', !Ref SlashPath]]
+      Type: String
+      Description: Topic ARN stored under a path built from the split values
+      Value: !Ref JoinedNameTopic
+
+Outputs:
+  TopicArn:
+    Description: ARN of the topic named with Fn::Join
+    Value: !Ref JoinedNameTopic
+  QueueUrl:
+    Description: URL of the queue named with Fn::Split and Fn::Join
+    Value: !Ref SplitNameQueue
+  ParameterName:
+    Description: SSM parameter name built with Fn::Sub and a map
+    Value: !Ref TopicArnParameter
