@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route 53 Resolver outbound endpoint and a forwarding rule that sends one domain to an on-premises DNS server
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that uses the forwarding rule
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Two subnets in different Availability Zones
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups that allow DNS (port 53 TCP and UDP) to on-premises
+  OnPremDnsIp:
+    Type: String
+    Default: 192.0.2.53
+    Description: IP address of the on-premises DNS server
+  ForwardedDomain:
+    Type: String
+    Default: corp.example.com
+    Description: Domain whose queries are forwarded on-premises
+
+Resources:
+  OutboundResolverEndpoint:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-outbound'
+      Direction: OUTBOUND
+      SecurityGroupIds: !Ref SecurityGroupIds
+      IpAddresses:
+        - SubnetId: !Select [0, !Ref SubnetIds]
+        - SubnetId: !Select [1, !Ref SubnetIds]
+
+  ForwardRule:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      Name: !Sub '${AWS::StackName}-forward-corp'
+      DomainName: !Ref ForwardedDomain
+      RuleType: FORWARD
+      ResolverEndpointId: !Ref OutboundResolverEndpoint
+      TargetIps:
+        - Ip: !Ref OnPremDnsIp
+          Port: '53'
+
+  ForwardRuleAssociation:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      ResolverRuleId: !Ref ForwardRule
+      VPCId: !Ref VpcId
+
+Outputs:
+  OutboundEndpointId:
+    Description: ID of the outbound resolver endpoint
+    Value: !Ref OutboundResolverEndpoint
+  ForwardRuleId:
+    Description: ID of the forwarding rule
+    Value: !Ref ForwardRule
