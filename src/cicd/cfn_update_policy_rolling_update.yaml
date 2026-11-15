@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto Scaling group with an UpdatePolicy that replaces instances in small batches while keeping capacity in service
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets where instances are launched
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter that resolves to the latest AMI
+
+Resources:
+  RollingLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        MetadataOptions:
+          HttpTokens: required
+
+  RollingAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT2M
+        WaitOnResourceSignals: false
+    Properties:
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref RollingLaunchTemplate
+        Version: !Sub '${RollingLaunchTemplate.LatestVersionNumber}'
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling group
+    Value: !Ref RollingAutoScalingGroup
