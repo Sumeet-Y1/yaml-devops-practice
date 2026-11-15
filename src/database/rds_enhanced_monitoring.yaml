@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS MySQL 8.4 instance with enhanced monitoring at 60 second granularity through a dedicated monitoring role
+
+Resources:
+  MonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+  MonitoredInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.4.5'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      BackupRetentionPeriod: 1
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt MonitoringRole.Arn
+
+Outputs:
+  DbEndpoint:
+    Description: Endpoint address of the instance
+    Value: !GetAtt MonitoredInstance.Endpoint.Address
+  MonitoringRoleArn:
+    Description: Role RDS uses to publish OS metrics
+    Value: !GetAtt MonitoringRole.Arn
