@@ -1,38 +1,38 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates a KMS multi-region primary key with automatic rotation and an
-  alias. A replica key with the same key ID and material can then be created
-  in another region (replicas must live in a separate stack in that region).
+Description: Multi-Region primary KMS key with rotation and an alias so replica keys can be created in other Regions
 
 Resources:
-  PrimaryKey:
+  PrimaryMultiRegionKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Description: Multi-region primary key for practice data
+      Description: Multi-Region primary key for practice
       MultiRegion: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
       EnableKeyRotation: true
       PendingWindowInDays: 7
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: EnableIamPermissions
+          - Sid: EnableAccountPermissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action: kms:*
             Resource: '*'
 
   PrimaryKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/practice-multi-region
-      TargetKeyId: !Ref PrimaryKey
+      AliasName: !Sub 'alias/${AWS::StackName}-multi-region'
+      TargetKeyId: !Ref PrimaryMultiRegionKey
 
 Outputs:
-  KeyId:
-    Description: Multi-region key IDs start with mrk-
-    Value: !Ref PrimaryKey
-
   KeyArn:
-    Description: Give this ARN to the replica stack as PrimaryKeyArn
-    Value: !GetAtt PrimaryKey.Arn
+    Description: ARN of the multi-Region primary key
+    Value: !GetAtt PrimaryMultiRegionKey.Arn
+  KeyId:
+    Description: Key ID shared by every replica of this key
+    Value: !Ref PrimaryMultiRegionKey
