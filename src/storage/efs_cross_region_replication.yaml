@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Encrypted EFS file system that replicates automatically to a new file system in another Region
+
+Parameters:
+  DestinationRegion:
+    Type: String
+    Default: us-west-2
+    Description: Region that receives the replica (must differ from the stack Region)
+
+Resources:
+  SourceFileSystem:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: elastic
+      BackupPolicy:
+        Status: ENABLED
+      ReplicationConfiguration:
+        Destinations:
+          - Region: !Ref DestinationRegion
+
+Outputs:
+  FileSystemId:
+    Description: ID of the source file system
+    Value: !Ref SourceFileSystem
+  FileSystemArn:
+    Description: ARN of the source file system
+    Value: !GetAtt SourceFileSystem.Arn
