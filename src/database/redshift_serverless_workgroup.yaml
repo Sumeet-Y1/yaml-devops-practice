@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Redshift Serverless namespace and workgroup with a managed admin password and a low base capacity
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets in at least three Availability Zones
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups allowed to reach the workgroup
+
+Resources:
+  AnalyticsNamespace:
+    Type: AWS::RedshiftServerless::Namespace
+    Properties:
+      NamespaceName: practice-namespace
+      DbName: analytics
+      AdminUsername: dbadmin
+      ManageAdminPassword: true
+      LogExports:
+        - userlog
+        - connectionlog
+
+  AnalyticsWorkgroup:
+    Type: AWS::RedshiftServerless::Workgroup
+    Properties:
+      WorkgroupName: practice-workgroup
+      NamespaceName: !GetAtt AnalyticsNamespace.Namespace.NamespaceName
+      BaseCapacity: 8
+      PubliclyAccessible: false
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds: !Ref SecurityGroupIds
+
+Outputs:
+  NamespaceArn:
+    Description: ARN of the namespace
+    Value: !GetAtt AnalyticsNamespace.Namespace.NamespaceArn
+  WorkgroupEndpoint:
+    Description: Endpoint address of the workgroup
+    Value: !GetAtt AnalyticsWorkgroup.Workgroup.Endpoint.Address
