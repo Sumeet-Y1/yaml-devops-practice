@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Signer signing profile and a Lambda code signing config that warns when a deployment package is unsigned
+
+Resources:
+  LambdaSigningProfile:
+    Type: AWS::Signer::SigningProfile
+    Properties:
+      PlatformId: AWSLambda-SHA384-ECDSA
+      SignatureValidityPeriod:
+        Type: MONTHS
+        Value: 12
+
+  FunctionCodeSigningConfig:
+    Type: AWS::Lambda::CodeSigningConfig
+    Properties:
+      Description: Only packages signed by the practice profile are trusted
+      AllowedPublishers:
+        SigningProfileVersionArns:
+          - !GetAtt LambdaSigningProfile.ProfileVersionArn
+      CodeSigningPolicies:
+        UntrustedArtifactOnDeployment: Warn
+
+Outputs:
+  SigningProfileArn:
+    Description: ARN of the signing profile
+    Value: !GetAtt LambdaSigningProfile.Arn
+  CodeSigningConfigArn:
+    Description: ARN to set as CodeSigningConfigArn on a function
+    Value: !GetAtt FunctionCodeSigningConfig.CodeSigningConfigArn
