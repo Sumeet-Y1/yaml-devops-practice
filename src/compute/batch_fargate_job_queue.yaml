@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Batch Fargate compute environment, job queue, and container job definition
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets where Batch jobs run
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups attached to the job network interfaces
+
+Resources:
+  JobExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  FargateComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      Type: MANAGED
+      State: ENABLED
+      ComputeResources:
+        Type: FARGATE
+        MaxvCpus: 4
+        Subnets: !Ref SubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+
+  JobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      Priority: 1
+      State: ENABLED
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref FargateComputeEnvironment
+
+  HelloJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      Type: container
+      PlatformCapabilities:
+        - FARGATE
+      ContainerProperties:
+        Image: public.ecr.aws/amazonlinux/amazonlinux:2023
+        Command:
+          - echo
+          - hello from batch
+        ExecutionRoleArn: !GetAtt JobExecutionRole.Arn
+        ResourceRequirements:
+          - Type: VCPU
+            Value: '0.25'
+          - Type: MEMORY
+            Value: '512'
+        NetworkConfiguration:
+          AssignPublicIp: ENABLED
+
+Outputs:
+  JobQueueArn:
+    Description: ARN of the job queue
+    Value: !Ref JobQueue
+  JobDefinitionArn:
+    Description: ARN of the job definition
+    Value: !Ref HelloJobDefinition
