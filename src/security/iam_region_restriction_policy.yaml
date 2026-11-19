@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM managed policy that denies actions outside approved Regions, with an exception list for global services
+
+Parameters:
+  AllowedRegions:
+    Type: CommaDelimitedList
+    Default: us-east-1,ap-south-1
+    Description: Regions where actions are still allowed
+
+Resources:
+  RegionRestrictionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Denies requests to Regions that are not approved
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyOutsideApprovedRegions
+            Effect: Deny
+            NotAction:
+              - iam:*
+              - organizations:*
+              - route53:*
+              - cloudfront:*
+              - sts:*
+              - support:*
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                aws:RequestedRegion: !Ref AllowedRegions
+
+  DeveloperGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      ManagedPolicyArns:
+        - !Ref RegionRestrictionPolicy
+
+Outputs:
+  PolicyArn:
+    Description: ARN of the Region restriction policy
+    Value: !Ref RegionRestrictionPolicy
+  GroupName:
+    Description: Group that carries the restriction
+    Value: !Ref DeveloperGroup
