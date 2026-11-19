@@ -1,48 +1,43 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates a Route 53 Resolver DNS Firewall with a blocked domain list,
-  a rule group that returns NXDOMAIN, and a VPC association.
+Description: Route 53 Resolver DNS Firewall that blocks a list of domains for one VPC
 
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: VPC to protect
+    Description: VPC protected by the firewall rule group
 
 Resources:
-  BlockedDomains:
+  BlockedDomainList:
     Type: AWS::Route53Resolver::FirewallDomainList
     Properties:
       Name: !Sub '${AWS::StackName}-blocked-domains'
       Domains:
-        - badexample.com
-        - '*.badexample.com'
-        - malware-test.org
-        - '*.malware-test.org'
+        - malware.example.com
+        - '*.badsite.example.net'
 
-  RuleGroup:
+  DnsFirewallRuleGroup:
     Type: AWS::Route53Resolver::FirewallRuleGroup
     Properties:
       Name: !Sub '${AWS::StackName}-rule-group'
       FirewallRules:
-        - FirewallDomainListId: !Ref BlockedDomains
-          Priority: 100
-          Action: BLOCK
+        - Action: BLOCK
           BlockResponse: NXDOMAIN
+          FirewallDomainListId: !Ref BlockedDomainList
+          Priority: 100
 
   RuleGroupAssociation:
     Type: AWS::Route53Resolver::FirewallRuleGroupAssociation
     Properties:
       Name: !Sub '${AWS::StackName}-association'
-      FirewallRuleGroupId: !Ref RuleGroup
+      FirewallRuleGroupId: !Ref DnsFirewallRuleGroup
       VpcId: !Ref VpcId
       Priority: 101
       MutationProtection: DISABLED
 
 Outputs:
-  RuleGroupId:
-    Description: ID of the firewall rule group
-    Value: !Ref RuleGroup
-
   DomainListId:
     Description: ID of the blocked domain list
-    Value: !Ref BlockedDomains
+    Value: !Ref BlockedDomainList
+  RuleGroupId:
+    Description: ID of the firewall rule group
+    Value: !Ref DnsFirewallRuleGroup
