@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge Scheduler one-time schedule in its own group with a flexible window that deletes itself after it runs
+
+Resources:
+  ReminderTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: One-time reminders
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PublishReminder
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref ReminderTopic
+
+  OneTimeScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-one-time'
+
+  ReminderSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${AWS::StackName}-reminder'
+      GroupName: !Ref OneTimeScheduleGroup
+      ScheduleExpression: at(2030-01-01T09:00:00)
+      ScheduleExpressionTimezone: Asia/Kolkata
+      ActionAfterCompletion: DELETE
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 15
+      Target:
+        Arn: !Ref ReminderTopic
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"message": "one-time reminder"}'
+
+Outputs:
+  ScheduleGroupName:
+    Description: Name of the schedule group
+    Value: !Ref OneTimeScheduleGroup
+  TopicArn:
+    Description: Topic that receives the reminder
+    Value: !Ref ReminderTopic
