@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::LanguageExtensions
+Description: Fn::FindInMap with a DefaultValue so Regions missing from the mapping still get a sensible result
+
+Mappings:
+  RegionDefaults:
+    us-east-1:
+      InstanceType: t3.micro
+    ap-south-1:
+      InstanceType: t3.small
+
+Resources:
+  InstanceTypeParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/practice/${AWS::StackName}/instance-type'
+      Type: String
+      Description: Instance type chosen from the mapping with a fallback
+      Value: !FindInMap [RegionDefaults, !Ref 'AWS::Region', InstanceType, DefaultValue: t3.micro]
+
+Outputs:
+  ParameterName:
+    Description: Name of the SSM parameter that holds the chosen instance type
+    Value: !Ref InstanceTypeParameter
