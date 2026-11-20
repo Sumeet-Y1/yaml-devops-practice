@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Rules section that validates parameter combinations before any resource is created
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+  RetentionTier:
+    Type: String
+    Default: short
+    AllowedValues:
+      - short
+      - long
+    Description: How long queue messages are kept
+
+Mappings:
+  RetentionSeconds:
+    short:
+      Seconds: 3600
+    long:
+      Seconds: 1209600
+
+Rules:
+  ProdRequiresLongRetention:
+    RuleCondition: !Equals [!Ref Environment, prod]
+    Assertions:
+      - Assert: !Equals [!Ref RetentionTier, long]
+        AssertDescription: Production queues must use the long retention tier
+
+Resources:
+  EnvironmentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: !FindInMap [RetentionSeconds, !Ref RetentionTier, Seconds]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  QueueUrl:
+    Description: URL of the queue
+    Value: !Ref EnvironmentQueue
