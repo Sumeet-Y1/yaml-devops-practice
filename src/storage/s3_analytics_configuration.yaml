@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket with a storage class analysis that exports access pattern reports to a separate bucket
+
+Resources:
+  AnalyticsReportBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'analytics-reports-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AnalyticsReportBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AnalyticsReportBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAnalyticsExport
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${AnalyticsReportBucket.Arn}/*'
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::analyzed-${AWS::AccountId}-${AWS::Region}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  AnalyzedBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: AnalyticsReportBucketPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'analyzed-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      AnalyticsConfigurations:
+        - Id: LogsAccessPattern
+          Prefix: logs/
+          StorageClassAnalysis:
+            DataExport:
+              OutputSchemaVersion: V_1
+              Destination:
+                BucketArn: !GetAtt AnalyticsReportBucket.Arn
+                BucketAccountId: !Ref AWS::AccountId
+                Format: CSV
+                Prefix: analytics/
+
+Outputs:
+  AnalyzedBucketName:
+    Description: Bucket being analyzed
+    Value: !Ref AnalyzedBucket
+  ReportBucketName:
+    Description: Bucket that receives the analysis exports
+    Value: !Ref AnalyticsReportBucket
