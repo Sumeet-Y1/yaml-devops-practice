@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda alias that sends most traffic to a stable version and a small share to a canary version
+
+Parameters:
+  StableVersion:
+    Type: String
+    Default: '1'
+    Description: Published version number that receives most traffic
+  CanaryVersion:
+    Type: String
+    Default: '2'
+    Description: Published version number that receives the canary share
+  CanaryWeight:
+    Type: Number
+    Default: 0.1
+    MinValue: 0
+    MaxValue: 1
+    Description: Fraction of traffic sent to the canary version
+
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  CanaryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 200, "body": "hello"}
+
+  LiveAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref CanaryFunction
+      FunctionVersion: !Ref StableVersion
+      Name: live
+      RoutingConfig:
+        AdditionalVersionWeights:
+          - FunctionVersion: !Ref CanaryVersion
+            FunctionWeight: !Ref CanaryWeight
+
+Outputs:
+  AliasArn:
+    Description: ARN of the weighted alias
+    Value: !Ref LiveAlias
