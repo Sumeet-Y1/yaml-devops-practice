@@ -1,14 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an EC2 On-Demand Capacity Reservation that guarantees compute
-  capacity in one Availability Zone, whether or not instances are running.
+Description: EC2 On-Demand Capacity Reservation that holds capacity in one Availability Zone with no end date
 
 Parameters:
   InstanceType:
     Type: String
     Default: t3.micro
     Description: Instance type to reserve
-
   InstanceCount:
     Type: Number
     Default: 1
@@ -16,7 +13,7 @@ Parameters:
     Description: Number of instances to reserve
 
 Resources:
-  CapacityReservation:
+  PracticeCapacityReservation:
     Type: AWS::EC2::CapacityReservation
     Properties:
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -26,13 +23,11 @@ Resources:
       InstanceMatchCriteria: open
       EndDateType: unlimited
       Tenancy: default
-      EbsOptimized: false
 
 Outputs:
   CapacityReservationId:
-    Description: ID of the reservation
-    Value: !Ref CapacityReservation
-
-  AvailableInstanceCount:
-    Description: Reserved slots not yet used by running instances
-    Value: !GetAtt CapacityReservation.AvailableInstanceCount
+    Description: ID of the capacity reservation
+    Value: !Ref PracticeCapacityReservation
+  TotalInstanceCount:
+    Description: Total number of instances reserved
+    Value: !Sub '${PracticeCapacityReservation.TotalInstanceCount}'
