@@ -1,33 +1,30 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an S3 Express One Zone directory bucket for single-digit
-  millisecond latency, stored in one Availability Zone.
+Description: S3 Express One Zone directory bucket pinned to one Availability Zone ID for low-latency access
 
 Parameters:
-  BucketBaseName:
-    Type: String
-    Default: practice-express
-    AllowedPattern: '[a-z0-9][a-z0-9-]{1,30}'
-    Description: Base name (the AZ ID and --x-s3 suffix are added automatically)
-
   AvailabilityZoneId:
     Type: String
     Default: use1-az4
-    Description: AZ ID (not name) where the bucket lives, for example use1-az4 or aps1-az1
+    Description: Availability Zone ID (not name) where the directory bucket lives
 
 Resources:
   DirectoryBucket:
     Type: AWS::S3Express::DirectoryBucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub '${BucketBaseName}--${AvailabilityZoneId}--x-s3'
+      BucketName: !Sub 'practice-${AWS::AccountId}--${AvailabilityZoneId}--x-s3'
       DataRedundancy: SingleAvailabilityZone
       LocationName: !Ref AvailabilityZoneId
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
 
 Outputs:
   BucketName:
-    Description: Directory bucket name
+    Description: Name of the directory bucket
     Value: !Ref DirectoryBucket
-
   BucketArn:
     Description: ARN of the directory bucket
     Value: !GetAtt DirectoryBucket.Arn
