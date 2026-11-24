@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Global Accelerator with static anycast IPs, a TCP listener, and an endpoint group that points at a regional load balancer
+
+Parameters:
+  EndpointRegion:
+    Type: String
+    Default: us-east-1
+    Description: Region that holds the endpoint
+  EndpointArn:
+    Type: String
+    Description: ARN of the load balancer (or other endpoint) that receives traffic
+
+Rules:
+  RequireUsWest2:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-west-2]
+        AssertDescription: The Global Accelerator control plane lives in us-west-2
+
+Resources:
+  PracticeAccelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Properties:
+      Name: !Sub '${AWS::StackName}-accelerator'
+      IpAddressType: IPV4
+      Enabled: true
+
+  TcpListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref PracticeAccelerator
+      Protocol: TCP
+      ClientAffinity: SOURCE_IP
+      PortRanges:
+        - FromPort: 80
+          ToPort: 80
+
+  PrimaryEndpointGroup:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref TcpListener
+      EndpointGroupRegion: !Ref EndpointRegion
+      TrafficDialPercentage: 100
+      HealthCheckProtocol: TCP
+      HealthCheckPort: 80
+      EndpointConfigurations:
+        - EndpointId: !Ref EndpointArn
+          Weight: 128
+          ClientIPPreservationEnabled: true
+
+Outputs:
+  AcceleratorDnsName:
+    Description: DNS name that resolves to the static anycast IPs
+    Value: !GetAtt PracticeAccelerator.DnsName
+  AcceleratorArn:
+    Description: ARN of the accelerator
+    Value: !Ref PracticeAccelerator
