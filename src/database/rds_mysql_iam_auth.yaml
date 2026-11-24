@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS MySQL instance with IAM database authentication, a pinned CA certificate, tag copying, and deletion protection settings
+
+Resources:
+  IamAuthInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.4.5'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      EnableIAMDatabaseAuthentication: true
+      CACertificateIdentifier: rds-ca-rsa2048-g1
+      CopyTagsToSnapshot: true
+      DeletionProtection: false
+      BackupRetentionPeriod: 1
+      PubliclyAccessible: false
+
+Outputs:
+  DbEndpoint:
+    Description: Endpoint address of the instance
+    Value: !GetAtt IamAuthInstance.Endpoint.Address
+  DbResourceId:
+    Description: Resource ID used in rds-db:connect IAM policies
+    Value: !GetAtt IamAuthInstance.DbiResourceId
