@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: WaitCondition with a handle that pauses the stack until an external signal arrives or the timeout expires
+
+Resources:
+  SignalHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+  SetupWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Handle: !Ref SignalHandle
+      Timeout: '300'
+      Count: 1
+
+  AfterSetupQueue:
+    Type: AWS::SQS::Queue
+    DependsOn: SetupWaitCondition
+    Properties:
+      MessageRetentionPeriod: 86400
+
+Outputs:
+  SignalUrl:
+    Description: Pre-signed URL that an external process sends its success signal to
+    Value: !Ref SignalHandle
+  QueueUrl:
+    Description: Queue created only after the signal arrives
+    Value: !Ref AfterSetupQueue
