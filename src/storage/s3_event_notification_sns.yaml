@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket that publishes object-removed events to an SNS topic, with the topic policy S3 needs
+
+Resources:
+  RemovalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Object removal events
+
+  RemovalTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref RemovalTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowS3Publish
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref RemovalTopic
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3:::sns-notify-${AWS::AccountId}-${AWS::Region}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  WatchedBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: RemovalTopicPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'sns-notify-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: 's3:ObjectRemoved:*'
+            Topic: !Ref RemovalTopic
+
+Outputs:
+  BucketName:
+    Description: Bucket that emits removal events
+    Value: !Ref WatchedBucket
+  TopicArn:
+    Description: Topic that receives the events
+    Value: !Ref RemovalTopic
