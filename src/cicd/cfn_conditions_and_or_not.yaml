@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Fn::And, Fn::Or, and Fn::Not combined into conditions that decide which resources and outputs exist
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+  EnableVersioning:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether bucket versioning is on
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  VersioningOn: !Equals [!Ref EnableVersioning, 'true']
+  ProdWithVersioning: !And
+    - !Condition IsProd
+    - !Condition VersioningOn
+  NotProd: !Not [!Condition IsProd]
+  ProdOrVersioning: !Or
+    - !Condition IsProd
+    - !Condition VersioningOn
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: !If [ProdOrVersioning, Enabled, Suspended]
+
+  DevScratchQueue:
+    Type: AWS::SQS::Queue
+    Condition: NotProd
+    Properties:
+      MessageRetentionPeriod: 3600
+
+  AuditTopic:
+    Type: AWS::SNS::Topic
+    Condition: ProdWithVersioning
+    Properties:
+      DisplayName: Audit notifications
+
+Outputs:
+  BucketName:
+    Description: Name of the data bucket
+    Value: !Ref DataBucket
+  DevQueueUrl:
+    Condition: NotProd
+    Description: Queue that exists only outside prod
+    Value: !Ref DevScratchQueue
+  AuditTopicArn:
+    Condition: ProdWithVersioning
+    Description: Topic that exists only in prod with versioning
+    Value: !Ref AuditTopic
