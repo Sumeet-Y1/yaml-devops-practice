@@ -1,18 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an Amazon Keyspaces (for Apache Cassandra) keyspace and an
-  on-demand table with partition and clustering keys.
+Description: Amazon Keyspaces keyspace and on-demand table with partition and clustering keys and point-in-time recovery
+
+Parameters:
+  KeyspaceName:
+    Type: String
+    Default: practice_keyspace
+    AllowedPattern: '^[a-z][a-z0-9_]{0,47}$'
+    Description: Keyspace name (underscores only, no hyphens)
 
 Resources:
-  Keyspace:
+  PracticeKeyspace:
     Type: AWS::Cassandra::Keyspace
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      KeyspaceName: practice_keyspace
+      KeyspaceName: !Ref KeyspaceName
 
   OrdersTable:
     Type: AWS::Cassandra::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      KeyspaceName: !Ref Keyspace
+      KeyspaceName: !Ref PracticeKeyspace
       TableName: orders
       PartitionKeyColumns:
         - ColumnName: customer_id
@@ -20,12 +29,10 @@ Resources:
       ClusteringKeyColumns:
         - Column:
             ColumnName: order_date
-            ColumnType: timestamp
+            ColumnType: text
           OrderBy: DESC
       RegularColumns:
-        - ColumnName: order_id
-          ColumnType: uuid
-        - ColumnName: total
+        - ColumnName: order_total
           ColumnType: decimal
       BillingMode:
         Mode: ON_DEMAND
@@ -34,8 +41,7 @@ Resources:
 Outputs:
   KeyspaceName:
     Description: Name of the keyspace
-    Value: !Ref Keyspace
-
+    Value: !Ref PracticeKeyspace
   TableName:
-    Description: Name of the table
+    Description: Name of the orders table
     Value: !Ref OrdersTable
