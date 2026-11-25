@@ -1,22 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Enables Lambda SnapStart for a Java function to cut cold start time. The
-  function snapshot is taken when a version is published, so the template
-  also creates a version and an alias that points to it.
+Description: Java Lambda function with SnapStart enabled for published versions to cut cold start time
 
 Parameters:
   CodeBucket:
     Type: String
-    Description: S3 bucket that holds the Java deployment package (JAR or ZIP)
-
+    Description: S3 bucket that holds the function jar or zip
   CodeKey:
     Type: String
-    Description: S3 key of the deployment package
-
-  HandlerName:
-    Type: String
-    Default: com.example.Handler::handleRequest
-    Description: Fully qualified handler method
+    Description: S3 key of the function package
 
 Resources:
   FunctionRole:
@@ -32,37 +23,38 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  JavaFunction:
+  SnapStartFunction:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: java21
-      Handler: !Ref HandlerName
-      MemorySize: 1024
-      Timeout: 30
+      Handler: com.example.Handler::handleRequest
       Role: !GetAtt FunctionRole.Arn
+      MemorySize: 512
+      Timeout: 30
       Code:
         S3Bucket: !Ref CodeBucket
         S3Key: !Ref CodeKey
       SnapStart:
         ApplyOn: PublishedVersions
 
-  FunctionVersion:
+  SnapStartVersion:
     Type: AWS::Lambda::Version
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: !Ref JavaFunction
+      FunctionName: !Ref SnapStartFunction
 
   LiveAlias:
     Type: AWS::Lambda::Alias
     Properties:
-      FunctionName: !Ref JavaFunction
-      FunctionVersion: !GetAtt FunctionVersion.Version
+      FunctionName: !Ref SnapStartFunction
+      FunctionVersion: !GetAtt SnapStartVersion.Version
       Name: live
 
 Outputs:
   AliasArn:
-    Description: Invoke this ARN to get SnapStart behavior (plain $LATEST has no snapshot)
+    Description: Invoke this alias so SnapStart is used
     Value: !Ref LiveAlias
-
-  FunctionName:
-    Description: Name of the function
-    Value: !Ref JavaFunction
+  VersionNumber:
+    Description: Published version with the snapshot
+    Value: !Sub '${SnapStartVersion.Version}'
