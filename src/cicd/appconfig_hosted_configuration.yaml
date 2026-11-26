@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AppConfig application, environment, hosted JSON configuration, deployment strategy, and a deployment that rolls it out
+
+Resources:
+  PracticeApplication:
+    Type: AWS::AppConfig::Application
+    Properties:
+      Name: !Sub '${AWS::StackName}-app'
+      Description: Application that owns the feature configuration
+
+  DevEnvironment:
+    Type: AWS::AppConfig::Environment
+    Properties:
+      ApplicationId: !Ref PracticeApplication
+      Name: dev
+
+  FeatureProfile:
+    Type: AWS::AppConfig::ConfigurationProfile
+    Properties:
+      ApplicationId: !Ref PracticeApplication
+      Name: feature-settings
+      LocationUri: hosted
+
+  FeatureConfigVersion:
+    Type: AWS::AppConfig::HostedConfigurationVersion
+    Properties:
+      ApplicationId: !Ref PracticeApplication
+      ConfigurationProfileId: !Ref FeatureProfile
+      ContentType: application/json
+      Content: '{"newCheckout": true, "maxItems": 25}'
+
+  ImmediateStrategy:
+    Type: AWS::AppConfig::DeploymentStrategy
+    Properties:
+      Name: !Sub '${AWS::StackName}-immediate'
+      DeploymentDurationInMinutes: 0
+      FinalBakeTimeInMinutes: 0
+      GrowthFactor: 100
+      ReplicateTo: NONE
+
+  FeatureDeployment:
+    Type: AWS::AppConfig::Deployment
+    Properties:
+      ApplicationId: !Ref PracticeApplication
+      EnvironmentId: !Ref DevEnvironment
+      ConfigurationProfileId: !Ref FeatureProfile
+      DeploymentStrategyId: !Ref ImmediateStrategy
+      ConfigurationVersion: !Sub '${FeatureConfigVersion.VersionNumber}'
+
+Outputs:
+  ApplicationId:
+    Description: ID of the AppConfig application
+    Value: !Ref PracticeApplication
+  ConfigurationProfileId:
+    Description: ID of the hosted configuration profile
+    Value: !Ref FeatureProfile
