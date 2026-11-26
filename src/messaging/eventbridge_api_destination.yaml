@@ -1,14 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Creates an EventBridge connection and API destination that forward order
-  events to an external HTTPS webhook using an API key.
+Description: EventBridge connection and API destination that call an external HTTPS endpoint on an hourly schedule
 
 Parameters:
-  WebhookUrl:
+  EndpointUrl:
     Type: String
     Default: https://example.com/webhook
-    Description: HTTPS endpoint that receives the events
-
+    Description: HTTPS endpoint that receives the requests
   ApiKeyValue:
     Type: String
     NoEcho: true
@@ -20,7 +17,7 @@ Resources:
     Type: AWS::Events::Connection
     Properties:
       Name: !Sub '${AWS::StackName}-connection'
-      Description: API key connection for the webhook
+      Description: API key authentication for the webhook
       AuthorizationType: API_KEY
       AuthParameters:
         ApiKeyAuthParameters:
@@ -32,11 +29,11 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-destination'
       ConnectionArn: !GetAtt WebhookConnection.Arn
-      InvocationEndpoint: !Ref WebhookUrl
+      InvocationEndpoint: !Ref EndpointUrl
       HttpMethod: POST
       InvocationRateLimitPerSecond: 5
 
-  InvokeRole:
+  InvokeDestinationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -55,23 +52,22 @@ Resources:
                 Action: events:InvokeApiDestination
                 Resource: !GetAtt WebhookDestination.Arn
 
-  OrderEventsRule:
+  HourlyWebhookRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-order-events'
-      EventPattern:
-        source:
-          - app.orders
+      Description: Call the webhook every hour
+      State: ENABLED
+      ScheduleExpression: rate(1 hour)
       Targets:
         - Id: WebhookTarget
           Arn: !GetAtt WebhookDestination.Arn
-          RoleArn: !GetAtt InvokeRole.Arn
+          RoleArn: !GetAtt InvokeDestinationRole.Arn
+          Input: '{"message": "hourly ping"}'
 
 Outputs:
   ApiDestinationArn:
     Description: ARN of the API destination
     Value: !GetAtt WebhookDestination.Arn
-
-  ConnectionArn:
-    Description: ARN of the connection
-    Value: !GetAtt WebhookConnection.Arn
+  RuleName:
+    Description: Name of the schedule rule
+    Value: !Ref HourlyWebhookRule
