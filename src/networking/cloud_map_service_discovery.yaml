@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cloud Map private DNS namespace with a service and a registered instance so workloads find each other by name
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that resolves the private namespace
+  NamespaceName:
+    Type: String
+    Default: practice.internal
+    Description: Private DNS namespace name
+  InstanceIp:
+    Type: String
+    Default: 10.0.0.25
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+    Description: IPv4 address to register for the instance
+
+Resources:
+  PrivateNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Ref NamespaceName
+      Vpc: !Ref VpcId
+      Description: Private namespace for service discovery
+
+  BackendService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: backend
+      NamespaceId: !GetAtt PrivateNamespace.Id
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 60
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  BackendInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Properties:
+      ServiceId: !Ref BackendService
+      InstanceId: backend-1
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref InstanceIp
+
+Outputs:
+  NamespaceId:
+    Description: ID of the private namespace
+    Value: !GetAtt PrivateNamespace.Id
+  ServiceArn:
+    Description: ARN of the discovery service
+    Value: !GetAtt BackendService.Arn
