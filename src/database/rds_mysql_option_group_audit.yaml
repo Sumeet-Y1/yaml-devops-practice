@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS MySQL option group that enables the MariaDB audit plugin to record connections and queries
+
+Resources:
+  MySqlAuditOptionGroup:
+    Type: AWS::RDS::OptionGroup
+    Properties:
+      EngineName: mysql
+      MajorEngineVersion: '8.0'
+      OptionGroupDescription: MySQL 8.0 options with the audit plugin turned on
+      OptionConfigurations:
+        - OptionName: MARIADB_AUDIT_PLUGIN
+          OptionSettings:
+            - Name: SERVER_AUDIT_EVENTS
+              Value: CONNECT,QUERY
+            - Name: SERVER_AUDIT_FILE_ROTATIONS
+              Value: '5'
+
+Outputs:
+  OptionGroupName:
+    Description: Name of the option group
+    Value: !Ref MySqlAuditOptionGroup
