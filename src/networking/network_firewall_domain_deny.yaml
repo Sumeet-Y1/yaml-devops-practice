@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Network Firewall with a stateful domain deny list rule group, a firewall policy, and a firewall in one subnet
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC protected by the firewall
+  FirewallSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Dedicated subnet for the firewall endpoint
+
+Resources:
+  DomainDenyRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties:
+      RuleGroupName: !Sub '${AWS::StackName}-domain-deny'
+      Type: STATEFUL
+      Capacity: 100
+      RuleGroup:
+        RulesSource:
+          RulesSourceList:
+            GeneratedRulesType: DENYLIST
+            TargetTypes:
+              - HTTP_HOST
+              - TLS_SNI
+            Targets:
+              - '.badsite.example.net'
+              - 'malware.example.com'
+
+  FirewallPolicy:
+    Type: AWS::NetworkFirewall::FirewallPolicy
+    Properties:
+      FirewallPolicyName: !Sub '${AWS::StackName}-policy'
+      FirewallPolicy:
+        StatelessDefaultActions:
+          - 'aws:forward_to_sfe'
+        StatelessFragmentDefaultActions:
+          - 'aws:forward_to_sfe'
+        StatefulRuleGroupReferences:
+          - ResourceArn: !Ref DomainDenyRuleGroup
+
+  PracticeFirewall:
+    Type: AWS::NetworkFirewall::Firewall
+    Properties:
+      FirewallName: !Sub '${AWS::StackName}-firewall'
+      FirewallPolicyArn: !Ref FirewallPolicy
+      VpcId: !Ref VpcId
+      SubnetMappings:
+        - SubnetId: !Ref FirewallSubnetId
+
+Outputs:
+  FirewallArn:
+    Description: ARN of the firewall
+    Value: !Ref PracticeFirewall
+  RuleGroupArn:
+    Description: ARN of the domain deny rule group
+    Value: !Ref DomainDenyRuleGroup
