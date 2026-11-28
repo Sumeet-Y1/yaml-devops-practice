@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 Tables table bucket with automatic cleanup of unreferenced files and a namespace to group tables
+
+Resources:
+  AnalyticsTableBucket:
+    Type: AWS::S3Tables::TableBucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableBucketName: !Sub 'practice-tables-${AWS::AccountId}-${AWS::Region}'
+      UnreferencedFileRemoval:
+        Status: Enabled
+        UnreferencedDays: 7
+        NoncurrentDays: 14
+
+  AnalyticsNamespace:
+    Type: AWS::S3Tables::Namespace
+    Properties:
+      TableBucketARN: !GetAtt AnalyticsTableBucket.TableBucketARN
+      Namespace: analytics
+
+Outputs:
+  TableBucketArn:
+    Description: ARN of the table bucket
+    Value: !GetAtt AnalyticsTableBucket.TableBucketARN
+  NamespaceName:
+    Description: Namespace that groups the tables
+    Value: !Ref AnalyticsNamespace
