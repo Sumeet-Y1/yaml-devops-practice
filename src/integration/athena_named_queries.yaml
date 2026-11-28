@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Athena named queries saved as code so teammates can reuse common analysis queries
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: default
+    Description: Glue database the queries run against
+  TableName:
+    Type: String
+    Default: access_logs
+    Description: Table the queries read from
+
+Resources:
+  TopPathsQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: !Sub '${AWS::StackName}-top-paths'
+      Description: Most requested paths in the last day
+      Database: !Ref DatabaseName
+      WorkGroup: primary
+      QueryString: !Sub |
+        SELECT request_path, COUNT(*) AS hits
+        FROM ${TableName}
+        WHERE request_time > current_timestamp - interval '1' day
+        GROUP BY request_path
+        ORDER BY hits DESC
+        LIMIT 20;
+
+  ErrorRateQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: !Sub '${AWS::StackName}-error-rate'
+      Description: Share of 5xx responses per hour
+      Database: !Ref DatabaseName
+      WorkGroup: primary
+      QueryString: !Sub |
+        SELECT date_trunc('hour', request_time) AS hour,
+               AVG(CASE WHEN status >= 500 THEN 1.0 ELSE 0.0 END) AS error_rate
+        FROM ${TableName}
+        GROUP BY 1
+        ORDER BY 1 DESC;
+
+Outputs:
+  TopPathsQueryId:
+    Description: ID of the top paths query
+    Value: !Ref TopPathsQuery
+  ErrorRateQueryId:
+    Description: ID of the error rate query
+    Value: !Ref ErrorRateQuery
