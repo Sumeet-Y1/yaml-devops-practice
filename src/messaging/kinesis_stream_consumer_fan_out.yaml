@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Kinesis data stream with a registered enhanced fan-out consumer that gets its own dedicated read throughput
+
+Resources:
+  OrdersStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub '${AWS::StackName}-orders'
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+
+  FanOutConsumer:
+    Type: AWS::Kinesis::StreamConsumer
+    Properties:
+      ConsumerName: analytics-consumer
+      StreamARN: !GetAtt OrdersStream.Arn
+
+Outputs:
+  StreamArn:
+    Description: ARN of the data stream
+    Value: !GetAtt OrdersStream.Arn
+  ConsumerArn:
+    Description: ARN of the enhanced fan-out consumer
+    Value: !Ref FanOutConsumer
