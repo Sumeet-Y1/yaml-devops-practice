@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda function triggered by a Kinesis data stream with parallel batches, an age limit, and partial batch failure reporting
+
+Resources:
+  EventStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+      RetentionPeriodHours: 24
+
+  StreamHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+
+  StreamHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt StreamHandlerRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              failures = []
+              for record in event["Records"]:
+                  print(record["kinesis"]["data"])
+              return {"batchItemFailures": failures}
+
+  KinesisEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt EventStream.Arn
+      FunctionName: !Ref StreamHandlerFunction
+      StartingPosition: TRIM_HORIZON
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 5
+      ParallelizationFactor: 2
+      MaximumRecordAgeInSeconds: 3600
+      MaximumRetryAttempts: 2
+      BisectBatchOnFunctionError: true
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+
+Outputs:
+  StreamName:
+    Description: Name of the Kinesis stream
+    Value: !Ref EventStream
+  FunctionName:
+    Description: Name of the stream handler
+    Value: !Ref StreamHandlerFunction
