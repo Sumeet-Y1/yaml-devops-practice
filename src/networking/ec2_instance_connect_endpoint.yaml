@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Instance Connect Endpoint that lets you SSH into private instances without a bastion host or public IP
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet that hosts the endpoint
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups attached to the endpoint
+
+Resources:
+  PrivateConnectEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Properties:
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds: !Ref SecurityGroupIds
+      PreserveClientIp: false
+
+Outputs:
+  EndpointId:
+    Description: ID of the Instance Connect Endpoint
+    Value: !Ref PrivateConnectEndpoint
