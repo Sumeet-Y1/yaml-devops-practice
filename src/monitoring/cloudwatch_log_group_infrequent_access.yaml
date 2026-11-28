@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch log groups in the Standard and Infrequent Access classes to compare cost versus features
+
+Resources:
+  StandardLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/standard'
+      LogGroupClass: STANDARD
+      RetentionInDays: 14
+
+  ArchiveLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/practice/${AWS::StackName}/infrequent'
+      LogGroupClass: INFREQUENT_ACCESS
+      RetentionInDays: 30
+
+Outputs:
+  StandardLogGroupName:
+    Description: Log group in the Standard class
+    Value: !Ref StandardLogGroup
+  ArchiveLogGroupName:
+    Description: Log group in the Infrequent Access class
+    Value: !Ref ArchiveLogGroup
