@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation macro backed by a Lambda function that adds a tag to every SQS queue in templates that use it
+
+Parameters:
+  MacroName:
+    Type: String
+    Default: PracticeAddQueueTag
+    Description: Name that templates use in their Transform section
+
+Resources:
+  MacroFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  MacroFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt MacroFunctionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              fragment = event["fragment"]
+              for resource in fragment.get("Resources", {}).values():
+                  if resource.get("Type") == "AWS::SQS::Queue":
+                      props = resource.setdefault("Properties", {})
+                      props.setdefault("Tags", []).append({"Key": "AddedByMacro", "Value": "true"})
+              return {
+                  "requestId": event["requestId"],
+                  "status": "success",
+                  "fragment": fragment,
+              }
+
+  QueueTagMacro:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: !Ref MacroName
+      Description: Adds an AddedByMacro tag to every SQS queue
+      FunctionName: !GetAtt MacroFunction.Arn
+
+Outputs:
+  MacroNameOutput:
+    Description: Name to use in the Transform section of other templates
+    Value: !Ref QueueTagMacro
+  MacroFunctionArn:
+    Description: ARN of the function that processes template fragments
+    Value: !GetAtt MacroFunction.Arn
